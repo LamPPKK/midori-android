@@ -7,19 +7,11 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/xanh_green"
-        android:title="@string/tabs" />
+        android:background="@color/xanh_green" />
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/tabs"
+        android:id="@+id/items"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:clipToPadding="false"
         android:padding="12dp" />
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/newTab"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:text="@string/new_tab" />
 </LinearLayout>

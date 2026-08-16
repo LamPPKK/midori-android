@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    app:cardCornerRadius="14dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="14dp">
+        <View
+            android:id="@+id/selectedIndicator"
+            android:layout_width="4dp"
+            android:layout_height="42dp"
+            android:background="@color/xanh_accent" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView android:id="@+id/tabTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1" android:textAppearance="?attr/textAppearanceTitleMedium" />
+            <TextView android:id="@+id/tabUrl" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/xanh_muted" />
+        </LinearLayout>
+        <ImageButton
+            android:id="@+id/closeTab"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close_tab"
+            android:src="@drawable/ic_clear_private_data_24dp" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -1,41 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <item android:id="@+id/actionTabs"
-          android:title="@string/tabs"
-          android:icon="@drawable/ic_add_to_photos_black_24dp"
-          app:showAsAction="ifRoom"/>
-
-    <item android:id="@+id/goBack"
-          android:title="@string/go_back"
-          app:showAsAction="ifRoom|collapseActionView"
-          android:orderInCategory="0"
-          android:icon="@drawable/ic_keyboard_backspace_black_24dp"/>
-
-    <item android:id="@+id/goForward"
-          app:showAsAction="ifRoom|collapseActionView"
-          android:title="@string/go_forward" android:icon="@drawable/ic_forward_black_24dp"/>
-
-    <item android:id="@+id/actionShare"
-          android:title="@string/actionShare"
-          android:icon="@drawable/ic_share_24dp"
-          app:showAsAction="collapseActionView"/>
-
-    <item android:id="@+id/download"
-          android:title="@string/download"
-          android:visible="true"
-          app:showAsAction="collapseActionView"/>
-
-    <item android:id="@+id/history"
-          android:title="@string/history"
-          app:showAsAction="collapseActionView"/>
-
-    <item android:id="@+id/actionClearPrivateData"
-          android:title="@string/actionClearPrivateData"
-          android:icon="@drawable/ic_clear_private_data_24dp"
-          app:showAsAction="collapseActionView"/>
-
-    <item android:id="@+id/actionRequestDesktopSite"
-          android:title="@string/actionRequestDesktopSite"
-          android:checkable="true"/>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_tabs" android:icon="@drawable/ic_add_to_photos_black_24dp" android:title="@string/tabs" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_new_tab" android:title="@string/new_tab" app:showAsAction="never" />
+    <item android:id="@+id/action_back" android:title="@string/back" app:showAsAction="never" />
+    <item android:id="@+id/action_forward" android:title="@string/forward" app:showAsAction="never" />
+    <item android:id="@+id/action_reload" android:icon="@drawable/ic_refresh_24dp" android:title="@string/reload" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_share" android:icon="@drawable/ic_share_24dp" android:title="@string/share" app:showAsAction="never" />
+    <item android:id="@+id/action_desktop_site" android:checkable="true" android:title="@string/desktop_site" app:showAsAction="never" />
+    <item android:id="@+id/action_add_bookmark" android:title="@string/add_bookmark" app:showAsAction="never" />
+    <item android:id="@+id/action_bookmarks" android:title="@string/bookmarks" app:showAsAction="never" />
+    <item android:id="@+id/action_history" android:title="@string/history" app:showAsAction="never" />
+    <item android:id="@+id/action_downloads" android:title="@string/downloads" app:showAsAction="never" />
+    <item android:id="@+id/action_clear_private_data" android:icon="@drawable/ic_clear_private_data_24dp" android:title="@string/clear_private_data" app:showAsAction="never" />
+    <item android:id="@+id/action_app_settings" android:title="@string/app_settings" app:showAsAction="never" />
 </menu>

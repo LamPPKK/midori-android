@@ -1,0 +1,5 @@
+Xanh Browser is a privacy-minded Android browser powered by the system WebView.
+
+Browse with independent tabs, restore your open pages after process death, and keep your history, bookmarks and download records in a local Room database. Xanh Browser blocks mixed content, disables cleartext production traffic, enables Safe Browsing and refuses unknown external link schemes.
+
+The interface adapts to phones, tablets and foldables and supports predictive back, file uploads, geolocation prompts, sharing, desktop mode and asynchronous privacy clearing.

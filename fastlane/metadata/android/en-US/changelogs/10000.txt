@@ -1,0 +1,1 @@
+First Xanh Browser release with secure multi-tab browsing, bookmarks, history and downloads.

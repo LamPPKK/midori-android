@@ -12,8 +12,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -23,6 +23,12 @@ jobs:
       - run: >-
           ./gradlew --no-daemon
           :backup-core:testDebugUnitTest
+          :sync-core:lintDebug
+          :sync-core:testDebugUnitTest
+          :sync-core:assembleDebug
+          :sync-core:assembleRelease
+          :sync-core:assembleAndroidTest
+          :sync-core:publishReleasePublicationToBuildRepository
           :app:lintDebug
           :app:testDebugUnitTest
           :app:assembleDebug
@@ -37,6 +43,14 @@ jobs:
             app/build/outputs/apk/androidTest/debug/*.apk
             app/build/outputs/bundle/release/*.aab
             app/build/reports/lint-results-debug.*
+            sync-core/build/outputs/aar/*.aar
+            sync-core/build/maven/**
+            sync-core/build/reports/lint-results-debug.*
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: xanh-browser-android-sbom.cdx.json
 
   dependency-review:
     if: github.event_name == 'pull_request'
@@ -44,7 +58,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high

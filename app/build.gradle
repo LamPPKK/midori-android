@@ -12,6 +12,15 @@ def uploadKeyAlias = providers.gradleProperty('xanhUploadKeyAlias')
 def uploadKeyPassword = providers.gradleProperty('xanhUploadKeyPassword')
     .orElse(providers.environmentVariable('XANH_ANDROID_KEY_PASSWORD')).orNull
 def hasUploadSigning = [uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword].every { it }
+def fxaClientId = providers.gradleProperty('xanhFxaClientId')
+    .orElse(providers.environmentVariable('XANH_FXA_CLIENT_ID')).orElse('').get()
+def escapedFxaClientId = fxaClientId.replace('\\', '\\\\').replace('"', '\\"')
+def selfHostedSyncOnly = providers.gradleProperty('xanhSyncSelfHostedOnly')
+    .orElse(providers.environmentVariable('XANH_SYNC_SELF_HOSTED_ONLY')).orElse('0').get() == '1'
+def mozillaHostedSync = providers.gradleProperty('xanhSyncMozillaHosted')
+    .orElse(providers.environmentVariable('XANH_SYNC_MOZILLA_HOSTED')).orElse('0').get() == '1'
+def mozillaProductionApproved = providers.gradleProperty('xanhFxaProductionApproved')
+    .orElse(providers.environmentVariable('XANH_FXA_PRODUCTION_APPROVED')).orElse('0').get() == '1'
 
 android {
     namespace = 'io.github.lamppkk.xanhbrowser'
@@ -24,6 +33,8 @@ android {
         versionCode = 10000
         versionName = '1.0.0'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+        buildConfigField 'String', 'XANH_FXA_CLIENT_ID', "\"${escapedFxaClientId}\""
+        buildConfigField 'boolean', 'XANH_SYNC_SELF_HOSTED_ONLY', selfHostedSyncOnly.toString()
         ksp {
             arg('room.schemaLocation', "$projectDir/schemas")
             arg('room.incremental', 'true')
@@ -56,7 +67,7 @@ android {
 
     buildFeatures {
         viewBinding = true
-        buildConfig = false
+        buildConfig = true
     }
 
     compileOptions {
@@ -82,18 +93,39 @@ tasks.matching { it.name == 'bundleRelease' }.configureEach {
 }
 
 tasks.register('bundleProductionRelease') {
-    dependsOn 'verifyReleaseSigning', 'bundleRelease'
+    dependsOn 'verifyReleaseSigning', 'verifyFirefoxSyncRelease', 'bundleRelease'
+}
+
+tasks.register('verifyFirefoxSyncRelease') {
+    doLast {
+        if (mozillaHostedSync == selfHostedSyncOnly) {
+            throw new GradleException(
+                'Select exactly one Sync release mode: Mozilla-hosted or self-hosted-only'
+            )
+        }
+        if (mozillaHostedSync && (!fxaClientId || !mozillaProductionApproved)) {
+            throw new GradleException(
+                'Mozilla-hosted Sync requires a registered client ID and production approval evidence'
+            )
+        }
+    }
 }
 
 dependencies {
     implementation project(':backup-core')
+    implementation project(':sync-core')
     implementation 'androidx.activity:activity-ktx:1.12.3'
     implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.browser:browser:1.9.0'
     implementation 'androidx.core:core-ktx:1.17.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.9.4'
+    implementation 'androidx.lifecycle:lifecycle-process:2.9.4'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.room:room-runtime:2.8.4'
     implementation 'androidx.room:room-ktx:2.8.4'
+    implementation 'androidx.webkit:webkit:1.15.0'
+    implementation 'androidx.work:work-runtime-ktx:2.10.5'
     implementation 'com.google.android.material:material:1.13.0'
     ksp 'androidx.room:room-compiler:2.8.4'
 

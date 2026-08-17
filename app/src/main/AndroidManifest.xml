@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -28,6 +29,7 @@
     </queries>
 
     <application
+        android:name=".XanhBrowserApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -41,7 +43,34 @@
         <meta-data android:name="android.webkit.WebView.EnableSafeBrowsing" android:value="true" />
         <meta-data android:name="android.webkit.WebView.MetricsOptOut" android:value="true" />
 
+        <!-- Application Services carries Glean transitively. Xanh Sync v1
+             performs no telemetry upload. The upstream release AAR has no
+             debug Activity class, and its manifest declaration is forced
+             non-exported so no external app can address it. -->
+        <activity
+            android:name="mozilla.telemetry.glean.debug.GleanDebugActivity"
+            android:exported="false"
+            tools:ignore="MissingClass"
+            tools:replace="android:exported" />
+
         <activity android:name=".LibraryActivity" android:exported="false" />
+        <activity android:name=".SyncSettingsActivity" android:exported="false" />
+        <activity android:name=".PasswordManagerActivity" android:exported="false" />
+        <activity android:name=".RemoteTabsActivity" android:exported="false" />
+        <activity
+            android:name=".SyncRedirectActivity"
+            android:exported="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="accounts"
+                    android:path="/oauth"
+                    android:scheme="xanh-browser" />
+            </intent-filter>
+        </activity>
         <activity android:name=".ActivityTabs" android:exported="false" android:parentActivityName=".BrowserActivity" />
         <activity
             android:name=".BrowserActivity"

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/use_self_hosted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/sync_self_hosted" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/accounts_url_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/sync_accounts_url">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/accounts_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/token_url_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/sync_token_url">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/token_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/client_id_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/sync_client_id">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/client_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textNoSuggestions" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <Button
+            android:id="@+id/sign_in"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/sync_sign_in" />
+
+        <Button
+            android:id="@+id/sync_now"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_now" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/sync_bookmarks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/bookmarks" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/sync_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/history" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/sync_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/tabs" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/sync_passwords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_passwords" />
+
+        <TextView
+            android:id="@+id/vault_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" />
+
+        <Button
+            android:id="@+id/unlock_passwords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_unlock_passwords" />
+
+        <Button
+            android:id="@+id/manage_passwords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_manage_passwords" />
+
+        <Button
+            android:id="@+id/disconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_disconnect" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

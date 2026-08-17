@@ -88,6 +88,12 @@ interface HistoryDao {
     @Query("SELECT * FROM history ORDER BY visitedAt DESC")
     fun observeAll(): Flow<List<HistoryEntry>>
 
+    @Query("SELECT * FROM history ORDER BY visitedAt DESC")
+    suspend fun getAll(): List<HistoryEntry>
+
+    @Query("SELECT * FROM history WHERE id = :id LIMIT 1")
+    suspend fun get(id: Long): HistoryEntry?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun record(entry: HistoryEntry)
 
@@ -103,8 +109,17 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<Bookmark>>
 
+    @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
+    suspend fun getAll(): List<Bookmark>
+
+    @Query("SELECT * FROM bookmarks WHERE id = :id LIMIT 1")
+    suspend fun get(id: Long): Bookmark?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(bookmark: Bookmark)
+
+    @Query("DELETE FROM bookmarks")
+    suspend fun clear()
 
     @Query("DELETE FROM bookmarks WHERE id = :id")
     suspend fun delete(id: Long)

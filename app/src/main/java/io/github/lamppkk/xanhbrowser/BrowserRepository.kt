@@ -4,8 +4,24 @@ import android.content.Context
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 
-class BrowserRepository internal constructor(private val database: BrowserDatabase) {
-    constructor(context: Context) : this(BrowserDatabase.get(context))
+class BrowserRepository internal constructor(
+    private val database: BrowserDatabase,
+    private val onLocalChange: suspend () -> Unit = {},
+    private val onHistoryRecorded: suspend (String, String, Long) -> Unit = { _, _, _ -> },
+    private val onBookmarkSaved: suspend (String, String) -> Unit = { _, _ -> },
+    private val onHistoryDeleted: suspend (String) -> Unit = {},
+    private val onBookmarkDeleted: suspend (String) -> Unit = {},
+    private val onHistoryCleared: suspend () -> Unit = {},
+) {
+    constructor(context: Context) : this(
+        BrowserDatabase.get(context),
+        { SyncCoordinator.get(context).recordLocalChange() },
+        { url, title, visitedAt -> SyncCoordinator.get(context).recordHistory(url, title, visitedAt) },
+        { url, title -> SyncCoordinator.get(context).saveBookmark(url, title) },
+        { url -> SyncCoordinator.get(context).deleteHistory(url) },
+        { url -> SyncCoordinator.get(context).deleteBookmark(url) },
+        { SyncCoordinator.get(context).clearHistory() },
+    )
 
     val tabs: Flow<List<BrowserTab>> = database.tabs().observeAll()
     val history: Flow<List<HistoryEntry>> = database.history().observeAll()
@@ -50,20 +66,38 @@ class BrowserRepository internal constructor(private val database: BrowserDataba
     }
 
     suspend fun updatePage(id: Long, url: String, title: String) {
+        val visitedAt = System.currentTimeMillis()
         database.withTransaction {
             database.tabs().updatePage(id, url, title)
             if (url.startsWith("http://") || url.startsWith("https://")) {
-                database.history().record(HistoryEntry(url = url, title = title))
+                database.history().record(HistoryEntry(url = url, title = title, visitedAt = visitedAt))
             }
         }
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            onHistoryRecorded(url, title, visitedAt)
+        }
+        onLocalChange()
     }
 
     suspend fun saveBookmark(url: String, title: String) {
         database.bookmarks().save(Bookmark(url = url, title = title))
+        onBookmarkSaved(url, title)
+        onLocalChange()
     }
 
-    suspend fun deleteHistory(id: Long) = database.history().delete(id)
-    suspend fun deleteBookmark(id: Long) = database.bookmarks().delete(id)
+    suspend fun deleteHistory(id: Long) {
+        val existing = database.history().get(id)
+        database.history().delete(id)
+        existing?.let { onHistoryDeleted(it.url) }
+        onLocalChange()
+    }
+
+    suspend fun deleteBookmark(id: Long) {
+        val existing = database.bookmarks().get(id)
+        database.bookmarks().delete(id)
+        existing?.let { onBookmarkDeleted(it.url) }
+        onLocalChange()
+    }
 
     suspend fun saveDownload(id: Long, url: String, fileName: String) {
         database.downloads().save(DownloadRecord(id = id, url = url, fileName = fileName))
@@ -79,10 +113,15 @@ class BrowserRepository internal constructor(private val database: BrowserDataba
 
     suspend fun deleteDownload(id: Long) = database.downloads().delete(id)
 
-    suspend fun clearPrivateData(homeUrl: String): BrowserTab = database.withTransaction {
-        database.history().clear()
-        database.downloads().clear()
-        database.tabs().clear()
-        createTabInternal(homeUrl)
+    suspend fun clearPrivateData(homeUrl: String): BrowserTab {
+        val tab = database.withTransaction {
+            database.history().clear()
+            database.downloads().clear()
+            database.tabs().clear()
+            createTabInternal(homeUrl)
+        }
+        onHistoryCleared()
+        onLocalChange()
+        return tab
     }
 }

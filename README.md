@@ -37,6 +37,8 @@ does not import data from the legacy Android application.
 - Asynchronous privacy clearing and WebView render-process recovery
 - Password-encrypted portable backup for regular tabs, compatible with the
   Lite, Android WebKit preview and Windows editions
+- Optional Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs
+  and an authenticated, Xanh-only password vault
 
 ## Security and privacy defaults
 
@@ -120,6 +122,16 @@ exposes the navigation, permission, download and 16 KiB-native-library baseline
 required by the full browser. The preview uses its own application ID and
 cannot silently replace this production edition.
 
+## Mozilla Accounts / Firefox Sync
+
+The `sync-core` module consumes the official Mozilla Application Services
+155.0 AARs and provides OAuth PKCE, Places/Tabs/Logins engines, WorkManager
+scheduling, encrypted account state and the native credential boundary. It can
+use an approved Mozilla-hosted client or an HTTPS self-hosted deployment. See
+[`docs/FIREFOX_SYNC.md`](docs/FIREFOX_SYNC.md) for data migration, security and
+release requirements. Account tokens, scoped keys and passwords are never part
+of `.xanhbackup`.
+
 ## Project structure
 
 | Path | Purpose |
@@ -131,6 +143,7 @@ cannot silently replace this production edition.
 | `app/src/main/.../LibraryActivity.kt` | History, bookmark and download library |
 | `app/src/main/.../AddressResolver.kt` | Validated address and search resolution |
 | `backup-core/` | Portable encrypted backup codec and cross-platform vectors |
+| `sync-core/` | Pinned Mozilla Application Services Android integration |
 | `app/schemas/` | Exported Room migration schema |
 | `app/src/test/` | Local unit tests |
 | `app/src/androidTest/` | Activity and database instrumentation tests |

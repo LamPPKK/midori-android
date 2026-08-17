@@ -27,6 +27,8 @@ new and intentionally starts with an empty profile.
 - Access to the dedicated Google Play listing, internal/closed tracks and
   pre-launch report
 - A dedicated upload key enrolled in Play App Signing
+- A registered Firefox Accounts client ID and redirect URI for this Android
+  application, or an explicitly documented self-hosted-only release
 - These four values supplied through the environment or matching private Gradle
   properties
 
@@ -65,6 +67,9 @@ application ID or user-facing product string.
 ./gradlew --no-daemon clean
 ./gradlew --no-daemon \
   :backup-core:testDebugUnitTest \
+  :sync-core:lintDebug \
+  :sync-core:testDebugUnitTest \
+  :sync-core:assembleDebug \
   :app:lintDebug \
   :app:testDebugUnitTest \
   :app:assembleDebug \
@@ -111,7 +116,19 @@ loaded in the WebView, and no private/cleared data returns after restart.
 
 ## 4. Build the signed production candidate
 
-Export all four `XANH_ANDROID_*` values, then run:
+Before packaging Sync, complete the Firefox↔Xanh interoperability suite and
+redaction/security review described in `docs/FIREFOX_SYNC.md`. For an approved
+Mozilla-hosted build export all four `XANH_ANDROID_*` values plus:
+
+```sh
+export XANH_SYNC_MOZILLA_HOSTED=1
+export XANH_FXA_CLIENT_ID='<registered Android client ID>'
+export XANH_FXA_PRODUCTION_APPROVED=1
+```
+
+If Mozilla production access was not approved, publish only the documented
+self-hosted mode with `XANH_SYNC_SELF_HOSTED_ONLY=1`; do not set the approval
+flag or advertise Mozilla-hosted compatibility. Then run:
 
 ```sh
 ./gradlew --no-daemon bundleProductionRelease
@@ -120,6 +137,7 @@ Export all four `XANH_ANDROID_*` values, then run:
 Verification:
 
 - `verifyReleaseSigning` succeeds.
+- `verifyFirefoxSyncRelease` succeeds for the explicitly selected server mode.
 - `app/build/outputs/bundle/release/app-release.aab` is signed by the dedicated
   Xanh Browser upload key.
 - The AAB reports `io.github.lamppkk.xanhbrowser`, `1.0.0`, code `10000`, minimum
@@ -149,6 +167,10 @@ closed testing.
 ## Final checklist
 
 - CI, CodeQL, dependency review, lint and Play pre-launch have no blocker/high.
+- The Application Services pin/notice/SBOM is present and four-engine
+  Firefox↔Xanh interoperability passes without local data loss.
+- Private data never enters Sync; the credential vault auto-locks on background
+  and after five minutes; database/log/crash inspection finds no secrets.
 - All required device/WebView scenarios pass.
 - Portable backup unit vectors and Android/Lite/Windows provider round-trips pass.
 - A signed Play-generated install works from a clean profile.

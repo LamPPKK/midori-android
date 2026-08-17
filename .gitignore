@@ -7,5 +7,6 @@
 *.xanhbackup
 /build
 /app/build
+**/build/
 /captures
 .externalNativeBuild

@@ -25,9 +25,15 @@ internal class XanhWebViewClient(
             else -> true
         }
 
-    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) = activity.onProgress(tabId, 0)
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        activity.onNavigationStarted(tabId, url)
+        activity.onProgress(tabId, 0)
+    }
 
-    override fun onPageFinished(view: WebView?, url: String?) = activity.onPageChanged(tabId, url, view?.title)
+    override fun onPageFinished(view: WebView?, url: String?) {
+        activity.onNavigationCommitted(tabId, url)
+        activity.onPageChanged(tabId, url, view?.title)
+    }
 
     override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler, error: SslError?) {
         handler.cancel()

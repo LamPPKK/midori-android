@@ -44,12 +44,16 @@ import androidx.lifecycle.lifecycleScope
 import io.github.lamppkk.xanhbrowser.backup.PortableBackup
 import io.github.lamppkk.xanhbrowser.backup.PortableBackupPayload
 import io.github.lamppkk.xanhbrowser.databinding.ActivityBrowserBinding
+import io.github.lamppkk.xanhbrowser.sync.CredentialContext
+import io.github.lamppkk.xanhbrowser.sync.CredentialPolicy
+import io.github.lamppkk.xanhbrowser.sync.SyncReason
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import org.json.JSONObject
 
 class BrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityBrowserBinding
@@ -57,6 +61,7 @@ class BrowserActivity : AppCompatActivity() {
     private val sessions = mutableMapOf<Long, WebView>()
     private val mobileUserAgents = mutableMapOf<Long, String>()
     private val desktopModes = mutableMapOf<Long, Boolean>()
+    private val credentialBridges = mutableMapOf<Long, XanhCredentialBridge>()
     private var activeTabId: Long = 0
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var geolocationRequest: Pair<String, GeolocationPermissions.Callback>? = null
@@ -112,6 +117,7 @@ class BrowserActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         repository = BrowserRepository(this)
+        SyncCoordinator.get(this).scheduleBackgroundSync()
         applyInsets()
         configureAddressBar()
         configureBackNavigation()
@@ -142,6 +148,12 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        val sync = SyncCoordinator.get(this)
+        lifecycleScope.launch {
+            if (withContext(Dispatchers.IO) { sync.isDue(SyncReason.STARTUP) }) {
+                runCatching { sync.sync(SyncReason.STARTUP) }
+            }
+        }
         if (!downloadReceiverRegistered) {
             ContextCompat.registerReceiver(
                 this,
@@ -174,6 +186,8 @@ class BrowserActivity : AppCompatActivity() {
         geolocationDialog?.dismiss()
         geolocationDialog = null
         completeGeolocation(false)
+        credentialBridges.values.forEach(XanhCredentialBridge::destroy)
+        credentialBridges.clear()
         sessions.values.forEach { webView ->
             binding.webContainer.removeView(webView)
             webView.stopLoading()
@@ -256,6 +270,7 @@ class BrowserActivity : AppCompatActivity() {
         }
         webView.webChromeClient = null
         webView.webViewClient = android.webkit.WebViewClient()
+        credentialBridges.remove(tabId)?.destroy()
         webView.destroy()
         mobileUserAgents.remove(tabId)
         desktopModes.remove(tabId)
@@ -301,6 +316,9 @@ class BrowserActivity : AppCompatActivity() {
         mobileUserAgents[tabId] = settings.userAgentString
         desktopModes[tabId] = false
         settings.userAgentString = "${settings.userAgentString} XanhBrowser/1.0"
+        credentialBridges[tabId] = XanhCredentialBridge(this@BrowserActivity, this, tabId).also {
+            it.install()
+        }
         webViewClient = XanhWebViewClient(this@BrowserActivity, tabId)
         webChromeClient = XanhWebChromeClient(this@BrowserActivity, tabId)
         setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
@@ -319,6 +337,63 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
 
+    internal fun onNavigationStarted(tabId: Long, url: String?) {
+        credentialBridges[tabId]?.navigationStarted(url)
+    }
+
+    internal fun onNavigationCommitted(tabId: Long, url: String?) {
+        credentialBridges[tabId]?.navigationCommitted(url)
+    }
+
+    internal fun showCredentialSuggestions(tabId: Long, origin: String, reply: (String) -> Unit) {
+        if (tabId != activeTabId) return
+        lifecycleScope.launch {
+            val runtime = SyncCoordinator.get(this@BrowserActivity).runtimeOrNull() ?: return@launch
+            if (!runtime.touchVault()) return@launch
+            val store = runtime.loginsOrNull() ?: return@launch
+            val requestedOrigin = canonicalOrigin(origin) ?: return@launch
+            val documentUrl = sessions[tabId]?.url ?: return@launch
+            val logins = withContext(Dispatchers.IO) {
+                store.list().filter { canonicalOrigin(it.origin) == requestedOrigin }
+            }
+            if (logins.isEmpty()) return@launch
+            AlertDialog.Builder(this@BrowserActivity)
+                .setTitle(R.string.sync_choose_credential)
+                .setItems(logins.map { it.username.ifBlank { getString(R.string.sync_empty_username) } }.toTypedArray()) {
+                    _, index ->
+                    val selected = logins[index]
+                    val allowed = runtime.touchVault() && CredentialPolicy.isAllowed(
+                        CredentialContext(
+                            documentUrl = documentUrl,
+                            topFrameOrigin = requestedOrigin,
+                            frameOrigin = requestedOrigin,
+                            isPrivate = false,
+                            userSelected = true,
+                        ),
+                        vaultUnlocked = true,
+                    )
+                    if (!allowed || sessions[tabId]?.url != documentUrl) return@setItems
+                    reply(
+                        JSONObject()
+                            .put("type", "credential-selected")
+                            .put("username", selected.username)
+                            .put("password", selected.password)
+                            .toString(),
+                    )
+                    lifecycleScope.launch(Dispatchers.IO) { runCatching { store.touch(selected.id) } }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun canonicalOrigin(value: String): String? {
+        val uri = value.toUri()
+        if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null) return null
+        val port = if (uri.port >= 0) ":${uri.port}" else ""
+        return "https://${uri.host!!.lowercase()}$port"
+    }
+
     internal fun onProgress(tabId: Long, progress: Int) {
         if (tabId != activeTabId) return
         binding.loadingProgress.progress = progress
@@ -328,6 +403,7 @@ class BrowserActivity : AppCompatActivity() {
     internal fun onRendererGone(tabId: Long) {
         val failed = sessions.remove(tabId) ?: return
         binding.webContainer.removeView(failed)
+        credentialBridges.remove(tabId)?.destroy()
         failed.destroy()
         mobileUserAgents.remove(tabId)
         desktopModes.remove(tabId)
@@ -646,6 +722,8 @@ class BrowserActivity : AppCompatActivity() {
         R.id.action_downloads -> { openLibrary(LibraryActivity.Mode.DOWNLOADS); true }
         R.id.action_export_backup -> { chooseBackupDestination(); true }
         R.id.action_import_backup -> { chooseBackupToImport(); true }
+        R.id.action_sync -> { startActivity(Intent(this, SyncSettingsActivity::class.java)); true }
+        R.id.action_remote_tabs -> { libraryResult.launch(Intent(this, RemoteTabsActivity::class.java)); true }
         R.id.action_clear_private_data -> { clearPrivateData(); true }
         R.id.action_app_settings -> {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()))

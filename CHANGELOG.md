@@ -12,6 +12,10 @@
 - Added unit and instrumentation tests plus build, device-matrix, CodeQL and
   dependency-review GitHub Actions workflows.
 - Added Google Play listing metadata and a guarded production-signing task.
+- Added Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs and
+  an authenticated Xanh-only password vault using Application Services 155.0.
+- Added idempotent Room-to-Places migration, WorkManager scheduling, OAuth
+  Custom Tabs and an origin/nonce-validated WebView credential bridge.
 
 ### Changed
 
@@ -30,6 +34,8 @@
 - Removed legacy external-storage permissions and made file/geolocation access
   user initiated.
 - Added asynchronous full privacy clearing and guarded release signing.
+- Added device-bound encryption for account state, biometric/device-credential
+  vault unlock, five-minute/background auto-lock and Mozilla approval gates.
 
 ### Removed
 

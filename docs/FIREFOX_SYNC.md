@@ -72,3 +72,34 @@ Production also requires the Firefox↔Xanh interop matrix, device tests,
 redaction review, FFI/message fuzzing, an SBOM and an independent security
 review. Credentials used by staging tests must never be stored in Git or CI
 logs.
+
+## Implementation snapshot (2026-08-18)
+
+The Android implementation builds against the checksum-verified Application
+Services 155.0 AARs. Local verification currently passes 17 JVM tests across
+the backup, Sync and browser modules; Android lint completes without errors;
+and the app plus Sync instrumentation APKs compile. The production bundle task
+remains guarded by explicit Sync mode, Mozilla approval and signing inputs.
+
+The verified implementation includes OAuth Custom Tabs, encrypted account
+state, authenticated vault unlock and background lock, idempotent
+Room-to-Places migration, all four Sync engines, WorkManager scheduling,
+remote-tab presentation and an AndroidX WebKit document-start credential
+bridge with exact origin, tab and navigation-nonce checks. “Delete from this
+device” removes local engine databases even when account restoration fails.
+
+The following evidence is deliberately not claimed by the repository yet:
+
+- Mozilla production client ID/redirect approval or production self-hosted
+  deployment credentials;
+- live Firefox-to-Xanh create/update/delete and conflict testing with a
+  disposable account;
+- executed instrumentation on API 26, 30, 33 and 36 across phone, tablet,
+  foldable and multiple System WebView versions;
+- signed, installed release artifacts and Play pre-launch results;
+- message/FFI fuzzing, secret-redaction review and an independent security
+  review.
+
+CI artifacts are verification outputs, not Play upload artifacts. Production
+remains blocked until the release commit has green remote CI and every item in
+the interoperability and security matrix has recorded evidence.

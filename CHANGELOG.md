@@ -16,6 +16,9 @@
   an authenticated Xanh-only password vault using Application Services 155.0.
 - Added idempotent Room-to-Places migration, WorkManager scheduling, OAuth
   Custom Tabs and an origin/nonce-validated WebView credential bridge.
+- Added checksum-verified dependencies, guarded Sync release modes and a
+  documented implementation-status record for interoperability and security
+  evidence.
 
 ### Changed
 

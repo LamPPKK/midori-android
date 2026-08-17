@@ -128,9 +128,11 @@ The `sync-core` module consumes the official Mozilla Application Services
 155.0 AARs and provides OAuth PKCE, Places/Tabs/Logins engines, WorkManager
 scheduling, encrypted account state and the native credential boundary. It can
 use an approved Mozilla-hosted client or an HTTPS self-hosted deployment. See
-[`docs/FIREFOX_SYNC.md`](docs/FIREFOX_SYNC.md) for data migration, security and
-release requirements. Account tokens, scoped keys and passwords are never part
-of `.xanhbackup`.
+[`docs/FIREFOX_SYNC.md`](docs/FIREFOX_SYNC.md) for the implementation snapshot,
+data migration, security and release requirements. Local build success does
+not open the production gate: live Firefox interoperability, signed artifacts,
+the device matrix and security review remain required. Account tokens, scoped
+keys and passwords are never part of `.xanhbackup`.
 
 ## Project structure
 

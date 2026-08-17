@@ -34,7 +34,11 @@ internal class XanhCredentialBridge(
         WebViewCompat.addWebMessageListener(
             webView,
             BRIDGE_NAME,
-            setOf("https://*"),
+            // Older Chromium WebView releases reject the non-standard
+            // `https://*` rule. The listener transport accepts all origins;
+            // onMessage remains fail-closed on HTTPS, the exact committed
+            // origin, the main frame, tab ID and navigation nonce.
+            setOf("*"),
             WebViewCompat.WebMessageListener(::onMessage),
         )
         installed = true

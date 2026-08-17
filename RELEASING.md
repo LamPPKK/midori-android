@@ -64,11 +64,12 @@ application ID or user-facing product string.
 ```sh
 ./gradlew --no-daemon clean
 ./gradlew --no-daemon \
-  lintDebug \
-  testDebugUnitTest \
-  assembleDebug \
-  assembleAndroidTest \
-  bundleRelease
+  :backup-core:testDebugUnitTest \
+  :app:lintDebug \
+  :app:testDebugUnitTest \
+  :app:assembleDebug \
+  :app:assembleAndroidTest \
+  :app:bundleRelease
 ```
 
 Verification:
@@ -96,7 +97,13 @@ Run `connectedDebugAndroidTest` on:
 Repeat the release-critical scenarios with multiple stable System WebView
 versions. At minimum, verify navigation, back/forward and predictive back,
 rotation, process death, multi-tab recovery, downloads, sharing, external
-schemes, file upload, per-origin geolocation consent and privacy clearing.
+schemes, file upload, per-origin geolocation consent, privacy clearing and an
+encrypted backup round-trip through Google Drive or another Documents provider.
+
+Import the same snapshot in Android Lite and Windows, and decode their shared
+golden vector locally. Confirm that only regular HTTP(S) tab URLs and the
+selected-tab/desktop setting cross platforms; cookies, passwords, cache and
+private state must never appear.
 
 Verification: all instrumentation tests and the manual browser checklist pass;
 no tab is duplicated after deep-link recreation, no explicit external scheme is
@@ -143,6 +150,7 @@ closed testing.
 
 - CI, CodeQL, dependency review, lint and Play pre-launch have no blocker/high.
 - All required device/WebView scenarios pass.
+- Portable backup unit vectors and Android/Lite/Windows provider round-trips pass.
 - A signed Play-generated install works from a clean profile.
 - Store metadata uses Xanh Browser consistently and does not promise a legacy
   data bridge.

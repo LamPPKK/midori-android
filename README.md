@@ -35,6 +35,8 @@ does not import data from the legacy Android application.
 - File upload and per-origin geolocation consent through Activity Result APIs
 - Checked external-scheme handoff for supported main-frame user actions
 - Asynchronous privacy clearing and WebView render-process recovery
+- Password-encrypted portable backup for regular tabs, compatible with the
+  Lite, Android WebKit preview and Windows editions
 
 ## Security and privacy defaults
 
@@ -46,6 +48,8 @@ does not import data from the legacy Android application.
 - Legacy external-storage permissions are not requested.
 - Private upload keys and passwords are accepted only through environment or
   private Gradle properties and must never enter Git.
+- Portable backups use PBKDF2-HMAC-SHA256 and AES-256-GCM, reject unsafe URLs
+  and never contain cookies, passwords, cache or private browsing state.
 
 JavaScript is enabled because modern websites require it. The WebView boundary,
 URI validation and permission checks are therefore part of the release security
@@ -66,17 +70,18 @@ Run the same local pipeline used by the primary CI workflow:
 
 ```sh
 ./gradlew --no-daemon \
-  lintDebug \
-  testDebugUnitTest \
-  assembleDebug \
-  assembleAndroidTest \
-  bundleRelease
+  :backup-core:testDebugUnitTest \
+  :app:lintDebug \
+  :app:testDebugUnitTest \
+  :app:assembleDebug \
+  :app:assembleAndroidTest \
+  :app:bundleRelease
 ```
 
 Run connected instrumentation tests with a device or emulator available:
 
 ```sh
-./gradlew --no-daemon connectedDebugAndroidTest
+./gradlew --no-daemon :app:connectedDebugAndroidTest
 ```
 
 Important outputs:
@@ -92,6 +97,29 @@ Important outputs:
 configuration. Follow [RELEASING.md](RELEASING.md) and use the guarded
 `bundleProductionRelease` task for production.
 
+## Encrypted backup and provider sync
+
+Use **Export encrypted backup** and **Import encrypted backup** in the browser
+menu. The operating-system Documents picker can write the `.xanhbackup` file
+directly to Google Drive or another installed provider. The same encrypted
+snapshot can be stored in an OS-backed-up folder or a Git working tree without
+giving Xanh Browser any cloud or Git credential.
+
+The full Android edition exports up to 50 regular open tabs and restores them
+as new tabs. Cookies, passwords, form data, cache, downloads and private state
+are excluded. See [`docs/PORTABLE_BACKUP.md`](docs/PORTABLE_BACKUP.md) for the
+wire format and conflict rules.
+
+## Android WebKit preview
+
+The separately installable WPE WebKit experiment is intentionally the Lite
+one-tab edition in the
+[core repository](https://github.com/LamPPKK/midori-core/tree/master/app-webkit).
+The full multi-tab app remains on serviced Android System WebView until WPEView
+exposes the navigation, permission, download and 16 KiB-native-library baseline
+required by the full browser. The preview uses its own application ID and
+cannot silently replace this production edition.
+
 ## Project structure
 
 | Path | Purpose |
@@ -102,6 +130,7 @@ configuration. Follow [RELEASING.md](RELEASING.md) and use the guarded
 | `app/src/main/.../BrowserRepository.kt` | Persistence and session operations |
 | `app/src/main/.../LibraryActivity.kt` | History, bookmark and download library |
 | `app/src/main/.../AddressResolver.kt` | Validated address and search resolution |
+| `backup-core/` | Portable encrypted backup codec and cross-platform vectors |
 | `app/schemas/` | Exported Room migration schema |
 | `app/src/test/` | Local unit tests |
 | `app/src/androidTest/` | Activity and database instrumentation tests |
@@ -117,9 +146,10 @@ tablet and foldable profiles. CI AABs are unsigned verification artifacts.
 
 ## Release scope
 
-Xanh Browser 1.0 supports Android API 26–36. A legacy-data bridge and platforms
-outside Android are not part of this repository's 1.0 scope. Xanh Browser Lite
-and the Linux desktop application are maintained in the
+Xanh Browser 1.0 supports Android API 26–36. A legacy-data bridge and a bundled
+WebKit engine for the full edition are not part of this repository's 1.0
+production scope. Xanh Browser Lite, its WebKit preview and the Linux desktop
+application are maintained in the
 [core repository](https://github.com/LamPPKK/midori-core).
 
 ## Historical baseline and license

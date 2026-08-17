@@ -4,6 +4,7 @@
 /local.properties
 .idea
 .DS_Store
+*.xanhbackup
 /build
 /app/build
 /captures

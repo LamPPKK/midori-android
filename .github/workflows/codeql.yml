@@ -23,5 +23,5 @@ jobs:
       - uses: github/codeql-action/init@v3
         with:
           languages: java-kotlin
-      - run: ./gradlew --no-daemon --no-build-cache clean assembleDebug
+      - run: ./gradlew --no-daemon --no-build-cache clean :app:assembleDebug
       - uses: github/codeql-action/analyze@v3

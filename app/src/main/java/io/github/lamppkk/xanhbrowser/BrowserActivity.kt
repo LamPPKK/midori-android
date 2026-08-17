@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.text.InputType
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
@@ -28,6 +29,7 @@ import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewDatabase
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
@@ -39,8 +41,13 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import io.github.lamppkk.xanhbrowser.backup.PortableBackup
+import io.github.lamppkk.xanhbrowser.backup.PortableBackupPayload
 import io.github.lamppkk.xanhbrowser.databinding.ActivityBrowserBinding
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -56,6 +63,25 @@ class BrowserActivity : AppCompatActivity() {
     private var geolocationDialog: AlertDialog? = null
     private var initialized = false
     private var downloadReceiverRegistered = false
+    private var pendingBackupPassword: CharArray? = null
+
+    private val createBackupDocument = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(PortableBackup.MIME_TYPE),
+    ) { uri ->
+        val password = pendingBackupPassword
+        pendingBackupPassword = null
+        if (uri == null || password == null) {
+            password?.fill('\u0000')
+        } else {
+            exportBackup(uri, password)
+        }
+    }
+
+    private val openBackupDocument = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) promptBackupPassword(R.string.import_backup) { importBackup(uri, it) }
+    }
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -141,6 +167,8 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        pendingBackupPassword?.fill('\u0000')
+        pendingBackupPassword = null
         fileCallback?.onReceiveValue(null)
         geolocationDialog?.setOnCancelListener(null)
         geolocationDialog?.dismiss()
@@ -421,10 +449,14 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun requestDesktopSite(item: MenuItem) {
-        val webView = activeWebView() ?: return
         val desktop = !(desktopModes[activeTabId] ?: false)
-        desktopModes[activeTabId] = desktop
         item.isChecked = desktop
+        applyDesktopSite(desktop)
+    }
+
+    private fun applyDesktopSite(desktop: Boolean) {
+        val webView = activeWebView() ?: return
+        desktopModes[activeTabId] = desktop
         val mobile = mobileUserAgents[activeTabId] ?: webView.settings.userAgentString
         webView.settings.userAgentString = if (desktop) {
             mobile.replace("; wv", "").replace(" Mobile", "") + " XanhBrowser/1.0"
@@ -432,6 +464,113 @@ class BrowserActivity : AppCompatActivity() {
         webView.settings.useWideViewPort = desktop
         webView.settings.loadWithOverviewMode = desktop
         webView.reload()
+    }
+
+    private fun chooseBackupDestination() {
+        promptBackupPassword(R.string.export_backup) { password ->
+            pendingBackupPassword?.fill('\u0000')
+            pendingBackupPassword = password
+            createBackupDocument.launch("xanh-browser-${System.currentTimeMillis()}${PortableBackup.FILE_EXTENSION}")
+        }
+    }
+
+    private fun chooseBackupToImport() {
+        openBackupDocument.launch(arrayOf(PortableBackup.MIME_TYPE, "application/octet-stream"))
+    }
+
+    private fun promptBackupPassword(title: Int, onAccepted: (CharArray) -> Unit) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.backup_password_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(R.string.backup_password_description)
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val password = input.text.toString().toCharArray()
+                if (password.size < 8) {
+                    password.fill('\u0000')
+                    Toast.makeText(this, R.string.backup_password_too_short, Toast.LENGTH_SHORT).show()
+                } else {
+                    onAccepted(password)
+                }
+                input.text?.clear()
+            }
+            .show()
+    }
+
+    private fun exportBackup(uri: Uri, password: CharArray) {
+        lifecycleScope.launch {
+            val result = try {
+                runCatching {
+                    val tabs = repository.allTabs()
+                        .filter { PortableBackup.isSupportedWebUrl(it.url) }
+                        .take(50)
+                    val urls = tabs.map(BrowserTab::url)
+                        .ifEmpty { listOf(getString(R.string.app_website)) }
+                    val selectedIndex = tabs.indexOfFirst { it.id == activeTabId }.coerceAtLeast(0)
+                    val payload = PortableBackupPayload(
+                        createdAtEpochMillis = System.currentTimeMillis(),
+                        sourceEdition = "android-full",
+                        urls = urls,
+                        selectedIndex = selectedIndex,
+                        desktopSite = desktopModes[activeTabId] ?: false,
+                    )
+                    withContext(Dispatchers.IO) {
+                        val encoded = PortableBackup.encode(payload, password)
+                        contentResolver.openOutputStream(uri, "w")?.use { it.write(encoded) }
+                            ?: error("Cannot open backup destination")
+                    }
+                }
+            } finally {
+                password.fill('\u0000')
+            }
+            Toast.makeText(
+                this@BrowserActivity,
+                if (result.isSuccess) R.string.backup_exported else R.string.backup_failed,
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    private fun importBackup(uri: Uri, password: CharArray) {
+        lifecycleScope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val encoded = contentResolver.openInputStream(uri)?.use(::readBoundedBackup)
+                            ?: error("Cannot open backup")
+                        PortableBackup.decode(encoded, password)
+                    }
+                }
+            } finally {
+                password.fill('\u0000')
+            }
+            result.onSuccess { backup ->
+                val imported = backup.urls.map { repository.createTab(it) }
+                val selected = imported[backup.selectedIndex]
+                repository.selectTab(selected.id)
+                showTab(selected.copy(selected = true))
+                if (backup.desktopSite) applyDesktopSite(true)
+                Toast.makeText(this@BrowserActivity, R.string.backup_imported, Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(this@BrowserActivity, R.string.backup_failed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun readBoundedBackup(input: java.io.InputStream): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            require(output.size() + count <= PortableBackup.MAX_ENCODED_BYTES) { "Backup is too large" }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
     }
 
     private fun saveBookmark() {
@@ -505,6 +644,8 @@ class BrowserActivity : AppCompatActivity() {
         R.id.action_bookmarks -> { openLibrary(LibraryActivity.Mode.BOOKMARKS); true }
         R.id.action_history -> { openLibrary(LibraryActivity.Mode.HISTORY); true }
         R.id.action_downloads -> { openLibrary(LibraryActivity.Mode.DOWNLOADS); true }
+        R.id.action_export_backup -> { chooseBackupDestination(); true }
+        R.id.action_import_backup -> { chooseBackupToImport(); true }
         R.id.action_clear_private_data -> { clearPrivateData(); true }
         R.id.action_app_settings -> {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()))

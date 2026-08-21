@@ -350,12 +350,20 @@ class BrowserActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val runtime = SyncCoordinator.get(this@BrowserActivity).runtimeOrNull() ?: return@launch
             if (!runCatching { runtime.touchVault() }.getOrDefault(false)) return@launch
-            val requestedOrigin = canonicalOrigin(origin) ?: return@launch
+            val requestedOrigin = CredentialPolicy.canonicalHttpsOrigin(
+                origin,
+                requireOriginOnly = true,
+            ) ?: return@launch
             val documentUrl = sessions[tabId]?.url ?: return@launch
+            val context = CredentialContext(
+                documentUrl = documentUrl,
+                topFrameOrigin = requestedOrigin,
+                frameOrigin = requestedOrigin,
+                isPrivate = false,
+                userSelected = true,
+            )
             val logins = withContext(Dispatchers.IO) {
-                runCatching {
-                    runtime.listLogins().filter { canonicalOrigin(it.origin) == requestedOrigin }
-                }
+                runCatching { runtime.credentialLogins(context) }
             }.getOrElse { return@launch }
             if (logins.isEmpty()) return@launch
             AlertDialog.Builder(this@BrowserActivity)
@@ -364,16 +372,7 @@ class BrowserActivity : AppCompatActivity() {
                     _, index ->
                     val selected = logins[index]
                     val allowed = runCatching { runtime.touchVault() }.getOrDefault(false) &&
-                        CredentialPolicy.isAllowed(
-                        CredentialContext(
-                            documentUrl = documentUrl,
-                            topFrameOrigin = requestedOrigin,
-                            frameOrigin = requestedOrigin,
-                            isPrivate = false,
-                            userSelected = true,
-                        ),
-                        vaultUnlocked = true,
-                    )
+                        CredentialPolicy.isAllowed(context, vaultUnlocked = true)
                     if (!allowed || sessions[tabId]?.url != documentUrl) return@setItems
                     reply(
                         JSONObject()
@@ -389,13 +388,6 @@ class BrowserActivity : AppCompatActivity() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-    }
-
-    private fun canonicalOrigin(value: String): String? {
-        val uri = value.toUri()
-        if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null) return null
-        val port = if (uri.port >= 0) ":${uri.port}" else ""
-        return "https://${uri.host!!.lowercase()}$port"
     }
 
     internal fun onProgress(tabId: Long, progress: Int) {

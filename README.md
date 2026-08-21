@@ -134,7 +134,10 @@ not open the production gate: live Firefox interoperability, signed artifacts,
 the device matrix and security review remain required. Account tokens, scoped
 keys and passwords are never part of `.xanhbackup`. Because Application
 Services engine registration is process-wide, Android also enforces one live
-Sync runtime per process to prevent cross-profile engine resolution.
+Sync runtime per process to prevent cross-profile engine resolution. Password
+suggestions require a recent trusted user gesture and an unlocked vault; the runtime
+returns only bounded form credentials matching the exact canonical HTTPS
+origin.
 
 ## Project structure
 

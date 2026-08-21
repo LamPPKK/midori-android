@@ -47,6 +47,9 @@
 - Serialized native runtime teardown with active calls, kept failed native
   cleanup fail-closed, removed raw Places/Logins handle exposure, and made
   delete-local cleanup and password UI resilient to disconnect races.
+- Restricted credential suggestions to bounded exact-origin form records,
+  rejected malformed metadata, and required a recent pointer or keyboard
+  trusted gesture before a page can request the native chooser.
 
 ### Removed
 

@@ -57,10 +57,13 @@ user-authentication-required Keystore key. The vault locks after five minutes
 or whenever the app leaves the foreground.
 
 The WebView bridge uses an AndroidX WebKit document-start script and validates
-HTTPS origin, top frame, tab ID, navigation nonce and message type. A renderer
-can only request a native credential chooser. Filling requires an explicit user
-selection, an unlocked vault and the exact current HTTPS origin. Private mode,
-HTTP, URL userinfo and cross-origin frames are denied.
+HTTPS origin, top frame, tab ID, navigation nonce and message type. A recent
+trusted pointer or keyboard gesture can request a native credential chooser;
+autofocus and synthetic DOM events cannot open it. The host queries only
+bounded form records for the exact
+canonical origin before decrypting them into the chooser. Filling requires an
+explicit user selection, an unlocked vault and an unchanged navigation. Private
+mode, HTTP, URL userinfo, HTTP-auth records and cross-origin frames are denied.
 
 Tokens, scoped keys, account state and passwords are excluded from logs and
 `.xanhbackup`. “Delete from this device” removes encrypted account state, sync
@@ -83,7 +86,7 @@ logs.
 ## Implementation snapshot (2026-08-22)
 
 The Android implementation builds against the checksum-verified Application
-Services 155.0 AARs. Local verification currently passes 21 JVM tests across
+Services 155.0 AARs. Local verification currently passes 22 JVM tests across
 the backup, Sync and browser modules; Android lint completes without errors;
 and the app plus Sync instrumentation APKs compile. The production bundle task
 remains guarded by explicit Sync mode, Mozilla approval and signing inputs.
@@ -92,8 +95,10 @@ The verified implementation includes OAuth Custom Tabs, encrypted account
 state, authenticated vault unlock and background lock, idempotent
 Room-to-Places migration, all four Sync engines, WorkManager scheduling,
 remote-tab presentation and an AndroidX WebKit document-start credential
-bridge with exact origin, tab and navigation-nonce checks. “Delete from this
-device” removes local engine databases even when account restoration fails.
+bridge with exact-origin, tab, navigation-nonce and recent-user-gesture checks.
+Credential results are bounded and filtered inside the Sync runtime before the
+native chooser receives them. “Delete from this device” removes local engine
+databases even when account restoration fails.
 Runtime use and close are serialized, native Places/Logins handles never
 escape the wrapper, failed engine registration retains the process lease
 fail-closed, and a retained password screen exits safely if another flow

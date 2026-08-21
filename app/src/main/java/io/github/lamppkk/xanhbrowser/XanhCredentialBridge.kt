@@ -7,9 +7,10 @@ import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import androidx.core.net.toUri
 import io.github.lamppkk.xanhbrowser.sync.BridgeEnvelope
 import io.github.lamppkk.xanhbrowser.sync.BridgePolicy
+import io.github.lamppkk.xanhbrowser.sync.CredentialPolicy
+import java.net.URI
 import java.util.UUID
 import org.json.JSONObject
 
@@ -53,10 +54,11 @@ internal class XanhCredentialBridge(
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             scriptHandler?.remove()
         }
+        val origin = CredentialPolicy.canonicalHttpsOrigin(committedUrl!!) ?: return
         scriptHandler = WebViewCompat.addDocumentStartJavaScript(
             webView,
             bootstrapScript(tabId, navigationNonce),
-            setOf(committedUrl!!.toUri().let { "${it.scheme}://${it.host}${portSuffix(it)}" }),
+            setOf(origin),
         )
     }
 
@@ -85,7 +87,9 @@ internal class XanhCredentialBridge(
     ) {
         if (!isMainFrame || message.type != WebMessageCompat.TYPE_STRING) return
         val currentUrl = committedUrl ?: return
-        val parsed = runCatching { JSONObject(message.data ?: return) }.getOrNull() ?: return
+        val data = message.data ?: return
+        if (data.length > MAX_BRIDGE_MESSAGE_CHARS) return
+        val parsed = runCatching { JSONObject(data) }.getOrNull() ?: return
         val envelope = BridgeEnvelope(
             parsed.optLong("tabId", -1),
             parsed.optString("navigationNonce"),
@@ -114,42 +118,64 @@ internal class XanhCredentialBridge(
         (() => {
           if (window.top !== window || !window.$BRIDGE_NAME) return;
           let requestedFor = null;
-          document.addEventListener('focusin', event => {
-            const target = event.target;
+          let userGestureDeadline = 0;
+          const noteUserGesture = () => { userGestureDeadline = performance.now() + 1500; };
+          const requestCredential = target => {
             if (!(target instanceof HTMLInputElement) || target.type !== 'password') return;
-            if (requestedFor === target) return;
+            if (performance.now() > userGestureDeadline) return;
+            userGestureDeadline = 0;
             requestedFor = target;
             window.$BRIDGE_NAME.postMessage(JSON.stringify({
               tabId: $tabId,
               navigationNonce: '$nonce',
               messageType: 'credential-request'
             }));
+          };
+          document.addEventListener('pointerdown', event => {
+            if (!event.isTrusted) return;
+            noteUserGesture();
+            requestCredential(event.target);
+          }, true);
+          document.addEventListener('keydown', event => {
+            if (event.isTrusted) noteUserGesture();
+          }, true);
+          document.addEventListener('focusin', event => {
+            if (!event.isTrusted) return;
+            requestCredential(event.target);
           }, true);
           window.$BRIDGE_NAME.onmessage = event => {
             let credential;
             try { credential = JSON.parse(event.data); } catch (_) { return; }
             if (!credential || credential.type !== 'credential-selected') return;
-            const password = document.querySelector('input[type="password"]');
-            if (!password) return;
-            const user = document.querySelector('input[autocomplete="username"], input[type="email"], input[type="text"]');
+            const password = requestedFor;
+            if (!(password instanceof HTMLInputElement) || !password.isConnected) return;
+            const root = password.form || document;
+            const user = root.querySelector('input[autocomplete="username"], input[type="email"], input[type="text"]');
             if (user) {
               user.value = credential.username || '';
               user.dispatchEvent(new Event('input', { bubbles: true }));
             }
             password.value = credential.password || '';
             password.dispatchEvent(new Event('input', { bubbles: true }));
+            requestedFor = null;
           };
         })();
     """.trimIndent()
 
-    private fun canonicalHttpsUrl(value: String?): String? = value?.takeIf {
-        val uri = it.toUri()
-        uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() && uri.userInfo == null
+    private fun canonicalHttpsUrl(value: String?): String? {
+        val candidate = value ?: return null
+        return runCatching {
+            val uri = URI(candidate)
+            require(
+                uri.scheme.equals("https", true) && uri.host != null && uri.userInfo == null &&
+                    uri.port in -1..65_535,
+            )
+            uri.toASCIIString()
+        }.getOrNull()
     }
-
-    private fun portSuffix(uri: Uri): String = if (uri.port >= 0) ":${uri.port}" else ""
 
     companion object {
         private const val BRIDGE_NAME = "xanhCredentials"
+        private const val MAX_BRIDGE_MESSAGE_CHARS = 4_096
     }
 }

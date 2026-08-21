@@ -218,6 +218,25 @@ class XanhSyncRuntime(
         logins?.list().orEmpty()
     }
 
+    /** Returns only bounded form credentials eligible for a native picker at
+     * the exact validated HTTPS origin. This avoids decrypting every saved
+     * password in the browser host before applying page policy. */
+    fun credentialLogins(context: CredentialContext): List<Login> = lifecycle.withOpen {
+        expireVault(System.currentTimeMillis() / 1_000)
+        val store = checkNotNull(logins) { "Password vault is locked" }
+        require(CredentialPolicy.isAllowed(context, vaultUnlocked = true)) {
+            "Credential context is not allowed"
+        }
+        val origin = checkNotNull(CredentialPolicy.canonicalHttpsOrigin(context.documentUrl))
+        val host = checkNotNull(java.net.URI(origin).host)
+        store.getByBaseDomain(host)
+            .asSequence()
+            .filter { login -> CredentialPolicy.isEligibleCredential(login, origin) }
+            .sortedWith(compareByDescending<Login> { it.timeLastUsed }.thenBy { it.id })
+            .take(CredentialPolicy.MAX_CREDENTIAL_RESULTS)
+            .toList()
+    }
+
     fun addLogin(entry: LoginEntry) = lifecycle.withOpen {
         expireVault(System.currentTimeMillis() / 1_000)
         checkNotNull(logins) { "Password vault is locked" }.add(entry)

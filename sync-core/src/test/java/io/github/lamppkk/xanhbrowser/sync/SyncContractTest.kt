@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import mozilla.appservices.logins.DatabaseLoginsStorage
+import mozilla.appservices.logins.Login
 import mozilla.appservices.places.PlacesApi
 
 class SyncContractTest {
@@ -188,6 +189,15 @@ class SyncContractTest {
         assertFalse(CredentialPolicy.isAllowed(valid.copy(isPrivate = true), true))
         assertFalse(CredentialPolicy.isAllowed(valid.copy(documentUrl = "http://example.org"), true))
         assertFalse(CredentialPolicy.isAllowed(valid.copy(frameOrigin = "https://evil.example"), true))
+        assertFalse(CredentialPolicy.isAllowed(valid.copy(topFrameOrigin = "https://user@example.org"), true))
+        assertFalse(CredentialPolicy.isAllowed(valid.copy(frameOrigin = "https://example.org/path"), true))
+        assertFalse(CredentialPolicy.isAllowed(valid.copy(frameOrigin = "https://example.org?query"), true))
+        assertTrue(
+            CredentialPolicy.isAllowed(
+                valid.copy(topFrameOrigin = "https://example.org:443"),
+                true,
+            ),
+        )
     }
 
     @Test
@@ -196,5 +206,47 @@ class SyncContractTest {
         assertTrue(BridgePolicy.validate(message, 7, "fresh", "https://example.org/login", setOf("credential-request")))
         assertFalse(BridgePolicy.validate(message.copy(navigationNonce = "stale"), 7, "fresh", "https://example.org", setOf("credential-request")))
         assertFalse(BridgePolicy.validate(message.copy(claimedOrigin = "https://evil.example"), 7, "fresh", "https://example.org", setOf("credential-request")))
+        assertFalse(BridgePolicy.validate(message.copy(claimedOrigin = "https://example.org/path"), 7, "fresh", "https://example.org", setOf("credential-request")))
+        assertFalse(BridgePolicy.validate(message.copy(navigationNonce = "x".repeat(129)), 7, "x".repeat(129), "https://example.org", setOf("credential-request")))
+        assertTrue(BridgePolicy.validate(message.copy(claimedOrigin = "https://example.org:443"), 7, "fresh", "https://example.org/login", setOf("credential-request")))
     }
+
+    @Test
+    fun `credential query accepts only bounded exact origin form records`() {
+        val origin = "https://example.org"
+        val valid = login(origin = origin, formActionOrigin = origin)
+        assertTrue(CredentialPolicy.isEligibleCredential(valid, origin))
+        assertTrue(
+            CredentialPolicy.isEligibleCredential(
+                valid.copy(origin = "https://example.org:443", formActionOrigin = "https://example.org:443"),
+                origin,
+            ),
+        )
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(origin = "https://sub.example.org"), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(formActionOrigin = "https://evil.example"), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(httpRealm = "restricted"), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(id = "tài-khoản"), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(password = ""), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(password = "x".repeat(4_097)), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(timesUsed = -1), origin))
+    }
+
+    private fun login(
+        origin: String,
+        formActionOrigin: String,
+    ): Login = Login(
+        "credential-id",
+        1,
+        1,
+        1,
+        1,
+        null,
+        origin,
+        null,
+        formActionOrigin,
+        "username",
+        "password",
+        "secret",
+        "person@example.org",
+    )
 }

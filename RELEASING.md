@@ -28,7 +28,8 @@ new and intentionally starts with an empty profile.
   pre-launch report
 - A dedicated upload key enrolled in Play App Signing
 - A registered Firefox Accounts client ID and redirect URI for this Android
-  application, or an explicitly documented self-hosted-only release
+  application (`xanh-browser-android://accounts/oauth`), or an explicitly
+  documented self-hosted-only release
 - These four values supplied through the environment or matching private Gradle
   properties
 

@@ -133,14 +133,15 @@ class SyncContractTest {
         val base = SyncConfiguration(
             AccountServer.Mozilla,
             "client",
-            "xanh-browser://accounts/oauth",
+            "xanh-browser-android://accounts/oauth",
             "Xanh Browser",
         )
         assertTrue(runCatching(base::validate).isSuccess)
         assertTrue(runCatching { base.copy(redirectUri = "http://example.test/oauth").validate() }.isFailure)
         assertTrue(runCatching { base.copy(redirectUri = "javascript:alert(1)").validate() }.isFailure)
         assertTrue(runCatching { base.copy(redirectUri = "xanh-browser://user@accounts/oauth").validate() }.isFailure)
-        assertTrue(runCatching { base.copy(redirectUri = "xanh-browser://accounts/oauth#secret").validate() }.isFailure)
+        assertTrue(runCatching { base.copy(redirectUri = "xanh-browser-android://accounts/oauth?code=preset").validate() }.isFailure)
+        assertTrue(runCatching { base.copy(redirectUri = "xanh-browser-android://accounts/oauth#secret").validate() }.isFailure)
     }
 
     @Test
@@ -148,7 +149,7 @@ class SyncContractTest {
         val base = SyncConfiguration(
             AccountServer.Mozilla,
             "client-a",
-            "xanh-browser://accounts/oauth",
+            "xanh-browser-android://accounts/oauth",
             "Device A",
         )
         assertTrue(base.persistenceIdentity() == base.copy(deviceName = "Device B").persistenceIdentity())

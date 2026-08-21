@@ -68,7 +68,7 @@
                 <data
                     android:host="accounts"
                     android:path="/oauth"
-                    android:scheme="xanh-browser" />
+                    android:scheme="xanh-browser-android" />
             </intent-filter>
         </activity>
         <activity android:name=".ActivityTabs" android:exported="false" android:parentActivityName=".BrowserActivity" />

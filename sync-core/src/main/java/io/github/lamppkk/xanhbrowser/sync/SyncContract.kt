@@ -50,9 +50,10 @@ data class SyncConfiguration(
                 !redirect.scheme.equals("http", ignoreCase = true) &&
                 redirect.host != null &&
                 redirect.userInfo == null &&
+                redirect.rawQuery == null &&
                 redirect.fragment == null
         ) {
-            "redirectUri must be an absolute non-cleartext callback without userinfo or a fragment"
+            "redirectUri must be an absolute non-cleartext callback without userinfo, query or fragment"
         }
         if (server is AccountServer.SelfHosted) {
             requireHttpsOrigin(server.accountsUrl, "accountsUrl")

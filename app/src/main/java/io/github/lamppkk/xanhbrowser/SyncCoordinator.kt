@@ -351,7 +351,7 @@ class SyncCoordinator private constructor(context: Context) {
     }
 
     companion object {
-        const val REDIRECT_SCHEME = "xanh-browser"
+        const val REDIRECT_SCHEME = "xanh-browser-android"
         const val REDIRECT_HOST = "accounts"
         const val REDIRECT_PATH = "/oauth"
         const val REDIRECT_URI = "$REDIRECT_SCHEME://$REDIRECT_HOST$REDIRECT_PATH"

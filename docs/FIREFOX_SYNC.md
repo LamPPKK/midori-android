@@ -20,7 +20,8 @@ feature; it must not copy the Rust runtime into the base APK.
 OAuth is opened in an Android Custom Tab. PKCE and OAuth state are managed by
 `FxaClient`; a Mozilla password is never entered into Xanh's WebView. The
 registered redirect URI for this edition is
-`xanh-browser://accounts/oauth`.
+`xanh-browser-android://accounts/oauth`. This callback is intentionally
+different from the Linux, Lite, Apple and Windows application identities.
 
 Mozilla-hosted mode requires a production client ID and Mozilla approval.
 Self-hosted mode requires an HTTPS Accounts URL, an HTTPS Token Server URL and

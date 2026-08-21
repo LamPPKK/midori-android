@@ -10,7 +10,7 @@ data class LegacyHistoryVisit(val url: String, val title: String, val visitedAtM
 data class MigrationCounts(val bookmarks: Int, val history: Int)
 
 /** Idempotent importer from the one-release read-only Room compatibility DB. */
-class PlacesMigration(private val places: PlacesApi) {
+internal class PlacesMigration(private val places: PlacesApi) {
     fun import(bookmarks: List<LegacyBookmark>, history: List<LegacyHistoryVisit>): MigrationCounts {
         val writer = places.getWriter()
         var bookmarkCount = 0

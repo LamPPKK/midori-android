@@ -39,6 +39,11 @@
 - Added asynchronous full privacy clearing and guarded release signing.
 - Added device-bound encryption for account state, biometric/device-credential
   vault unlock, five-minute/background auto-lock and Mozilla approval gates.
+- Enforced one live Application Services runtime per Android process so global
+  Sync engine registration cannot cross account/profile boundaries.
+- Serialized native runtime teardown with active calls, kept failed native
+  cleanup fail-closed, removed raw Places/Logins handle exposure, and made
+  delete-local cleanup and password UI resilient to disconnect races.
 
 ### Removed
 

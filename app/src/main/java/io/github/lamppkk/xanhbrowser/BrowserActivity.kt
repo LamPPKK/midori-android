@@ -349,20 +349,22 @@ class BrowserActivity : AppCompatActivity() {
         if (tabId != activeTabId) return
         lifecycleScope.launch {
             val runtime = SyncCoordinator.get(this@BrowserActivity).runtimeOrNull() ?: return@launch
-            if (!runtime.touchVault()) return@launch
-            val store = runtime.loginsOrNull() ?: return@launch
+            if (!runCatching { runtime.touchVault() }.getOrDefault(false)) return@launch
             val requestedOrigin = canonicalOrigin(origin) ?: return@launch
             val documentUrl = sessions[tabId]?.url ?: return@launch
             val logins = withContext(Dispatchers.IO) {
-                store.list().filter { canonicalOrigin(it.origin) == requestedOrigin }
-            }
+                runCatching {
+                    runtime.listLogins().filter { canonicalOrigin(it.origin) == requestedOrigin }
+                }
+            }.getOrElse { return@launch }
             if (logins.isEmpty()) return@launch
             AlertDialog.Builder(this@BrowserActivity)
                 .setTitle(R.string.sync_choose_credential)
                 .setItems(logins.map { it.username.ifBlank { getString(R.string.sync_empty_username) } }.toTypedArray()) {
                     _, index ->
                     val selected = logins[index]
-                    val allowed = runtime.touchVault() && CredentialPolicy.isAllowed(
+                    val allowed = runCatching { runtime.touchVault() }.getOrDefault(false) &&
+                        CredentialPolicy.isAllowed(
                         CredentialContext(
                             documentUrl = documentUrl,
                             topFrameOrigin = requestedOrigin,
@@ -380,7 +382,9 @@ class BrowserActivity : AppCompatActivity() {
                             .put("password", selected.password)
                             .toString(),
                     )
-                    lifecycleScope.launch(Dispatchers.IO) { runCatching { store.touch(selected.id) } }
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        runCatching { runtime.touchLogin(selected.id) }
+                    }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()

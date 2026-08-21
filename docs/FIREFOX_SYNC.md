@@ -42,6 +42,12 @@ changes that device's selection. WorkManager handles connected background
 work; foreground work is limited to once per 15 minutes, local changes are
 debounced for 30 seconds, sync is single-flight and server backoff always wins.
 
+Application Services 155 keeps its Sync engine registrations process-wide.
+Android therefore permits exactly one live Xanh Sync runtime per process: a
+second profile fails before registering any engine, and the lease is released
+only after all native stores close successfully. This prevents an account from
+resolving another profile's Places, Tabs or Logins engine.
+
 ## Password boundary
 
 Account state and Sync metadata are encrypted with an Android Keystore key.
@@ -73,10 +79,10 @@ redaction review, FFI/message fuzzing, an SBOM and an independent security
 review. Credentials used by staging tests must never be stored in Git or CI
 logs.
 
-## Implementation snapshot (2026-08-18)
+## Implementation snapshot (2026-08-22)
 
 The Android implementation builds against the checksum-verified Application
-Services 155.0 AARs. Local verification currently passes 17 JVM tests across
+Services 155.0 AARs. Local verification currently passes 21 JVM tests across
 the backup, Sync and browser modules; Android lint completes without errors;
 and the app plus Sync instrumentation APKs compile. The production bundle task
 remains guarded by explicit Sync mode, Mozilla approval and signing inputs.
@@ -87,6 +93,10 @@ Room-to-Places migration, all four Sync engines, WorkManager scheduling,
 remote-tab presentation and an AndroidX WebKit document-start credential
 bridge with exact origin, tab and navigation-nonce checks. “Delete from this
 device” removes local engine databases even when account restoration fails.
+Runtime use and close are serialized, native Places/Logins handles never
+escape the wrapper, failed engine registration retains the process lease
+fail-closed, and a retained password screen exits safely if another flow
+disconnects or replaces its runtime.
 
 The following evidence is deliberately not claimed by the repository yet:
 

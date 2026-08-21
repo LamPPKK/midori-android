@@ -17,7 +17,6 @@ import io.github.lamppkk.xanhbrowser.sync.AccountServer
 import io.github.lamppkk.xanhbrowser.sync.AccountState
 import io.github.lamppkk.xanhbrowser.sync.LegacyBookmark
 import io.github.lamppkk.xanhbrowser.sync.LegacyHistoryVisit
-import io.github.lamppkk.xanhbrowser.sync.PlacesMigration
 import io.github.lamppkk.xanhbrowser.sync.SyncConfiguration
 import io.github.lamppkk.xanhbrowser.sync.SyncReason
 import io.github.lamppkk.xanhbrowser.sync.SyncEngine
@@ -34,36 +33,39 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import mozilla.appservices.remotetabs.RemoteTabRecord
-import mozilla.appservices.places.BookmarkRoot
-import mozilla.appservices.places.uniffi.BookmarkItem
-import mozilla.appservices.places.uniffi.VisitObservation
-import mozilla.appservices.places.uniffi.VisitType
 
 class SyncCoordinator private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     @Volatile private var runtime: XanhSyncRuntime? = null
+    @Volatile private var nativeOwnershipUncertain = false
 
     @Synchronized
     fun configure(configuration: SyncConfiguration) {
         configuration.validate()
-        runtime?.close()
+        check(!nativeOwnershipUncertain) { "Mozilla Sync native ownership is uncertain" }
+        try {
+            runtime?.close()
+        } catch (error: Throwable) {
+            nativeOwnershipUncertain = true
+            throw error
+        }
         runtime = null
         preferences.edit {
             putString(CLIENT_ID, configuration.clientId)
             putString(ACCOUNTS_URL, (configuration.server as? AccountServer.SelfHosted)?.accountsUrl)
             putString(TOKEN_URL, (configuration.server as? AccountServer.SelfHosted)?.tokenServerUrl)
         }
-        runtime = XanhSyncRuntime(appContext, configuration).also(::applyEnginePreferences)
+        runtime = createRuntime(configuration)
     }
 
     @Synchronized
     fun runtimeOrNull(): XanhSyncRuntime? {
+        if (nativeOwnershipUncertain) return null
         runtime?.let { return it }
         val configuration = storedConfiguration() ?: return null
-        return runCatching { XanhSyncRuntime(appContext, configuration) }
+        return runCatching { createRuntime(configuration) }
             .getOrNull()
-            ?.also(::applyEnginePreferences)
             .also { runtime = it }
     }
 
@@ -105,40 +107,26 @@ class SyncCoordinator private constructor(context: Context) {
 
     suspend fun recordHistory(url: String, title: String, visitedAt: Long) = withContext(Dispatchers.IO) {
         if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.places()?.getWriter()?.noteObservation(
-            VisitObservation(
-                url = url,
-                title = title,
-                visitType = VisitType.LINK,
-                at = visitedAt,
-            ),
-        )
+        runtimeOrNull()?.recordHistory(url, title, visitedAt)
     }
 
     suspend fun saveBookmark(url: String, title: String) = withContext(Dispatchers.IO) {
         if (!isSyncableWebUrl(url)) return@withContext
-        val writer = runtimeOrNull()?.places()?.getWriter() ?: return@withContext
-        if (writer.getBookmarksWithURL(url).isEmpty()) {
-            writer.createBookmarkItem(BookmarkRoot.Mobile.id, url, title.ifBlank { url })
-        }
+        runtimeOrNull()?.saveBookmark(url, title)
     }
 
     suspend fun deleteHistory(url: String) = withContext(Dispatchers.IO) {
         if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.places()?.getWriter()?.deleteVisitsFor(url)
+        runtimeOrNull()?.deleteHistory(url)
     }
 
     suspend fun deleteBookmark(url: String) = withContext(Dispatchers.IO) {
         if (!isSyncableWebUrl(url)) return@withContext
-        val writer = runtimeOrNull()?.places()?.getWriter() ?: return@withContext
-        writer.getBookmarksWithURL(url).forEach { item ->
-            val bookmark = item as? BookmarkItem.Bookmark ?: return@forEach
-            writer.deleteBookmarkNode(bookmark.b.guid)
-        }
+        runtimeOrNull()?.deleteBookmark(url)
     }
 
     suspend fun clearHistory() = withContext(Dispatchers.IO) {
-        runtimeOrNull()?.places()?.getWriter()?.deleteEverything()
+        runtimeOrNull()?.clearHistory()
     }
 
     suspend fun sync(reason: SyncReason): SyncSnapshot = withContext(Dispatchers.IO) {
@@ -167,14 +155,55 @@ class SyncCoordinator private constructor(context: Context) {
     fun lockVault() = runtimeOrNull()?.lockVault()
 
     suspend fun disconnect(deleteLocal: Boolean) = withContext(Dispatchers.IO) {
-        val active = runtimeOrNull()
-        active?.disconnect(deleteLocal)
-        active?.close()
-        synchronized(this) { runtime = null }
-        if (deleteLocal) {
-            XanhSyncRuntime.deleteLocalData(appContext)
-            preferences.edit { clear() }
-            File(appContext.noBackupFilesDir, "sync-migration").deleteRecursively()
+        synchronized(this@SyncCoordinator) {
+            val active = runtimeOrNull()
+            check(!nativeOwnershipUncertain) {
+                "Cannot delete Sync data while native ownership is uncertain"
+            }
+            var failure: Throwable? = null
+            try {
+                active?.disconnect(deleteLocal)
+            } catch (error: Throwable) {
+                failure = error
+            }
+
+            var closedCleanly = false
+            try {
+                active?.close()
+                closedCleanly = true
+            } catch (closeError: Throwable) {
+                nativeOwnershipUncertain = true
+                val first = failure
+                if (first == null) failure = closeError else first.addSuppressed(closeError)
+            }
+
+            if (closedCleanly) {
+                nativeOwnershipUncertain = false
+                if (runtime === active) runtime = null
+                if (deleteLocal) {
+                    fun cleanup(block: () -> Unit) {
+                        try {
+                            block()
+                        } catch (cleanupError: Throwable) {
+                            val first = failure
+                            if (first == null) failure = cleanupError else first.addSuppressed(cleanupError)
+                        }
+                    }
+                    cleanup { XanhSyncRuntime.deleteLocalData(appContext) }
+                    cleanup {
+                        check(preferences.edit().clear().commit()) {
+                            "Failed to clear Firefox Sync preferences"
+                        }
+                    }
+                    cleanup {
+                        val migration = File(appContext.noBackupFilesDir, "sync-migration")
+                        check(!migration.exists() || migration.deleteRecursively()) {
+                            "Failed to remove Firefox Sync migration backup"
+                        }
+                    }
+                }
+            }
+            failure?.let { throw it }
         }
     }
 
@@ -226,6 +255,29 @@ class SyncCoordinator private constructor(context: Context) {
         }
     }
 
+    private fun createRuntime(configuration: SyncConfiguration): XanhSyncRuntime {
+        val created = try {
+            XanhSyncRuntime(appContext, configuration)
+        } catch (error: Throwable) {
+            if (!XanhSyncRuntime.isProcessRegistryAvailable()) {
+                nativeOwnershipUncertain = true
+            }
+            throw error
+        }
+        try {
+            applyEnginePreferences(created)
+            return created
+        } catch (error: Throwable) {
+            try {
+                created.close()
+            } catch (closeError: Throwable) {
+                nativeOwnershipUncertain = true
+                error.addSuppressed(closeError)
+            }
+            throw error
+        }
+    }
+
     private fun isSyncableWebUrl(value: String): Boolean = runCatching {
         val uri = value.toUri()
         (uri.scheme.equals("https", true) || uri.scheme.equals("http", true)) &&
@@ -259,7 +311,7 @@ class SyncCoordinator private constructor(context: Context) {
         )
         val checksum = MessageDigest.getInstance("SHA-256").digest(snapshot).joinToString("") { "%02x".format(it) }
         check(backup.readBytes().contentEquals(snapshot)) { "Pre-Sync migration backup verification failed" }
-        val counts = PlacesMigration(runtime.places()).import(
+        val counts = runtime.importLegacyData(
             bookmarks.map { LegacyBookmark(it.url, it.title) },
             history.map { LegacyHistoryVisit(it.url, it.title, it.visitedAt) },
         )
@@ -272,30 +324,26 @@ class SyncCoordinator private constructor(context: Context) {
     }
 
     private suspend fun refreshPlacesCompatibilityMirror(runtime: XanhSyncRuntime) {
-        val reader = runtime.places().openReader()
-        val visits = reader.getVisitPage(0, PLACES_MIRROR_LIMIT.toLong(), emptyList())
-        val bookmarks = reader.getRecentBookmarks(PLACES_MIRROR_LIMIT)
-            .mapNotNull { (it as? BookmarkItem.Bookmark)?.b }
-        reader.close()
+        val mirror = runtime.placesMirror(PLACES_MIRROR_LIMIT)
         val database = BrowserDatabase.get(appContext)
         database.withTransaction {
             database.history().clear()
-            visits.forEach { visit ->
+            mirror.history.forEach { visit ->
                 database.history().record(
                     HistoryEntry(
                         url = visit.url,
-                        title = visit.title.orEmpty(),
-                        visitedAt = visit.timestamp,
+                        title = visit.title,
+                        visitedAt = visit.visitedAt,
                     ),
                 )
             }
             database.bookmarks().clear()
-            bookmarks.forEach { bookmark ->
+            mirror.bookmarks.forEach { bookmark ->
                 database.bookmarks().save(
                     Bookmark(
                         url = bookmark.url,
-                        title = bookmark.title.orEmpty(),
-                        createdAt = bookmark.dateAdded,
+                        title = bookmark.title,
+                        createdAt = bookmark.createdAt,
                     ),
                 )
             }

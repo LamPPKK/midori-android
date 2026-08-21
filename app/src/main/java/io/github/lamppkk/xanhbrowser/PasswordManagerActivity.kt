@@ -30,7 +30,7 @@ class PasswordManagerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val available = SyncCoordinator.get(this).runtimeOrNull()
-        if (available?.snapshot()?.vaultUnlocked != true || available.loginsOrNull() == null) {
+        if (available == null || !runCatching { available.snapshot().vaultUnlocked }.getOrDefault(false)) {
             Toast.makeText(this, R.string.sync_vault_locked, Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -61,11 +61,12 @@ class PasswordManagerActivity : AppCompatActivity() {
 
     private fun refresh() {
         lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) { runtime.loginsOrNull()?.list().orEmpty() }
-            if (!runtime.touchVault()) {
-                finish()
-                return@launch
-            }
+            val loaded = withContext(Dispatchers.IO) { runCatching(runtime::listLogins) }
+                .getOrElse {
+                    finishForUnavailableRuntime()
+                    return@launch
+                }
+            if (!runtimeCallOrFalse { runtime.touchVault() }) return@launch
             logins = loaded.sortedWith(compareBy(Login::origin, Login::username))
             list.adapter = ArrayAdapter(
                 this@PasswordManagerActivity,
@@ -84,15 +85,13 @@ class PasswordManagerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (::runtime.isInitialized && runtime.snapshot().vaultUnlocked) refresh()
-        else if (::runtime.isInitialized) finish()
+        if (!::runtime.isInitialized) return
+        if (runCatching { runtime.snapshot().vaultUnlocked }.getOrDefault(false)) refresh()
+        else finishForUnavailableRuntime()
     }
 
     private fun editLogin(existing: Login?) {
-        if (!runtime.touchVault()) {
-            finish()
-            return
-        }
+        if (!runtimeCallOrFalse { runtime.touchVault() }) return
         val origin = EditText(this).apply {
             hint = getString(R.string.sync_password_origin)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
@@ -136,9 +135,15 @@ class PasswordManagerActivity : AppCompatActivity() {
                     username = username.text.toString(),
                 )
                 lifecycleScope.launch {
-                    withContext(Dispatchers.IO) {
-                        val storage = checkNotNull(runtime.loginsOrNull())
-                        if (existing == null) storage.add(entry) else storage.update(existing.id, entry)
+                    val changed = withContext(Dispatchers.IO) {
+                        runCatching {
+                            if (existing == null) runtime.addLogin(entry)
+                            else runtime.updateLogin(existing.id, entry)
+                        }
+                    }
+                    if (changed.isFailure) {
+                        finishForUnavailableRuntime()
+                        return@launch
                     }
                     SyncCoordinator.get(this@PasswordManagerActivity).recordLocalChange()
                     refresh()
@@ -154,7 +159,13 @@ class PasswordManagerActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.sync_delete_password) { _, _ ->
                 lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { runtime.loginsOrNull()?.delete(login.id) }
+                    val deleted = withContext(Dispatchers.IO) {
+                        runCatching { runtime.deleteLogin(login.id) }
+                    }
+                    if (deleted.isFailure) {
+                        finishForUnavailableRuntime()
+                        return@launch
+                    }
                     SyncCoordinator.get(this@PasswordManagerActivity).recordLocalChange()
                     refresh()
                 }
@@ -165,6 +176,18 @@ class PasswordManagerActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    private fun runtimeCallOrFalse(block: () -> Boolean): Boolean =
+        runCatching(block).getOrDefault(false).also { available ->
+            if (!available) finishForUnavailableRuntime()
+        }
+
+    private fun finishForUnavailableRuntime() {
+        if (!isFinishing) {
+            Toast.makeText(this, R.string.sync_vault_locked, Toast.LENGTH_SHORT).show()
+            finish()
+        }
     }
 
     private fun canonicalHttpsOrigin(value: String): String? = runCatching {

@@ -132,7 +132,9 @@ use an approved Mozilla-hosted client or an HTTPS self-hosted deployment. See
 data migration, security and release requirements. Local build success does
 not open the production gate: live Firefox interoperability, signed artifacts,
 the device matrix and security review remain required. Account tokens, scoped
-keys and passwords are never part of `.xanhbackup`.
+keys and passwords are never part of `.xanhbackup`. Because Application
+Services engine registration is process-wide, Android also enforces one live
+Sync runtime per process to prevent cross-profile engine resolution.
 
 ## Project structure
 

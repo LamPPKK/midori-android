@@ -4,6 +4,9 @@ import android.app.Activity
 import android.app.DownloadManager
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputFilter
+import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
@@ -13,7 +16,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.lamppkk.xanhbrowser.databinding.ActivityLibraryBinding
+import io.github.lamppkk.xanhbrowser.sync.PlacesMutationPolicy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -49,15 +55,28 @@ class LibraryActivity : AppCompatActivity() {
                     finish()
                 }
             },
+            onEdit = if (mode == Mode.BOOKMARKS) {
+                { row -> showBookmarkRename(row) }
+            } else null,
             onDelete = { row ->
                 lifecycleScope.launch {
-                    when (mode) {
-                        Mode.HISTORY -> repository.deleteHistory(row.id)
-                        Mode.BOOKMARKS -> repository.deleteBookmark(row.id)
-                        Mode.DOWNLOADS -> {
-                            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).remove(row.id)
-                            repository.deleteDownload(row.id)
+                    try {
+                        when (mode) {
+                            Mode.HISTORY -> repository.deleteHistory(row.id)
+                            Mode.BOOKMARKS -> repository.deleteBookmark(row.id)
+                            Mode.DOWNLOADS -> {
+                                (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).remove(row.id)
+                                repository.deleteDownload(row.id)
+                            }
                         }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        Toast.makeText(
+                            this@LibraryActivity,
+                            R.string.browser_data_delete_failed,
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
                 }
             },
@@ -83,6 +102,36 @@ class LibraryActivity : AppCompatActivity() {
                 rows.collect(adapter::submitList)
             }
         }
+    }
+
+    private fun showBookmarkRename(row: LibraryRow) {
+        val input = EditText(this).apply {
+            setText(row.title)
+            hint = getString(R.string.bookmark_title)
+            isSingleLine = true
+            filters = arrayOf(InputFilter.LengthFilter(PlacesMutationPolicy.MAX_TITLE_BYTES))
+            setSelection(text.length)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.rename_bookmark)
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.rename_bookmark) { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        repository.renameBookmark(row.id, input.text.toString())
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        Toast.makeText(
+                            this@LibraryActivity,
+                            R.string.bookmark_rename_failed,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            }
+            .show()
     }
 
     private fun formatTime(value: Long): String = DateFormat.getDateTimeInstance().format(Date(value))

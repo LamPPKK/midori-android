@@ -143,6 +143,17 @@ Verification: all instrumentation tests and the manual browser checklist pass;
 no tab is duplicated after deep-link recreation, no explicit external scheme is
 loaded in the WebView, and no private/cleared data returns after restart.
 
+For Firefox Places, install a schema-1 database and verify migration to schema
+2 preserves every row with an empty pending identity. After Sync, verify the
+Room mirror retains each bookmark GUID and each visit's exact timestamp/remote
+bit, including two bookmarks with the same URL. Rename one duplicate bookmark
+and delete the other; Firefox must receive changes for only those GUIDs and URL,
+folder and position must remain unchanged. Delete one of two same-URL history
+visits and verify only the selected timestamp receives a tombstone. Repeat
+rename/delete while Places is unavailable, restart at the marker/Room boundary,
+and confirm the next Sync imports the pending result without restoring the old
+row. A malformed or stale GUID must fail closed without deleting by URL.
+
 ## 4. Build the signed production candidate
 
 Before packaging Sync, complete the Firefox↔Xanh interoperability suite and

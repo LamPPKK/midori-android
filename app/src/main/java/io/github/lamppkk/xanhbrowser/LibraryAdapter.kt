@@ -1,6 +1,7 @@
 package io.github.lamppkk.xanhbrowser
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -11,6 +12,7 @@ internal data class LibraryRow(val id: Long, val url: String, val title: String,
 
 internal class LibraryAdapter(
     private val onOpen: (LibraryRow) -> Unit,
+    private val onEdit: ((LibraryRow) -> Unit)?,
     private val onDelete: (LibraryRow) -> Unit,
 ) : ListAdapter<LibraryRow, LibraryAdapter.LibraryViewHolder>(Diff) {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LibraryViewHolder {
@@ -25,6 +27,8 @@ internal class LibraryAdapter(
             binding.itemTitle.text = row.title.ifBlank { row.url }
             binding.itemSubtitle.text = row.subtitle
             binding.root.setOnClickListener { onOpen(row) }
+            binding.editItem.visibility = if (onEdit == null) View.GONE else View.VISIBLE
+            binding.editItem.setOnClickListener { onEdit?.invoke(row) }
             binding.deleteItem.setOnClickListener { onDelete(row) }
         }
     }

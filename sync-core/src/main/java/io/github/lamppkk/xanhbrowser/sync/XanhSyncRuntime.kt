@@ -258,33 +258,53 @@ class XanhSyncRuntime(
     }
 
     fun recordHistory(url: String, title: String, visitedAtMillis: Long) = lifecycle.withOpen {
-        placesApi.getWriter().noteObservation(
-            VisitObservation(
-                url = url,
-                title = title,
-                visitType = VisitType.LINK,
-                at = visitedAtMillis,
-            ),
+        require(visitedAtMillis > 0) { "History visit timestamp is invalid" }
+        val writer = placesApi.getWriter()
+        val exists = writer.getVisitInfos(
+            visitedAtMillis,
+            visitedAtMillis,
+            emptyList(),
+        ).any { existing -> existing.url == url }
+        if (!exists) {
+            writer.noteObservation(
+                VisitObservation(
+                    url = url,
+                    title = PlacesMutationPolicy.sanitizeTitle(title, url),
+                    visitType = VisitType.LINK,
+                    at = visitedAtMillis,
+                ),
+            )
+        }
+    }
+
+    fun saveBookmark(url: String, title: String): String = lifecycle.withOpen {
+        val writer = placesApi.getWriter()
+        val safeTitle = PlacesMutationPolicy.sanitizeTitle(title, url)
+        val existing = writer.getBookmarksWithURL(url)
+            .firstNotNullOfOrNull { (it as? BookmarkItem.Bookmark)?.b }
+        if (existing != null) {
+            writer.updateBookmark(existing.guid, null, null, safeTitle, null)
+            existing.guid
+        } else {
+            writer.createBookmarkItem(BookmarkRoot.Mobile.id, url, safeTitle)
+        }
+    }
+
+    fun renameBookmark(guid: String, title: String) = lifecycle.withOpen {
+        val safeGuid = PlacesMutationPolicy.requireSyncGuid(guid)
+        val safeTitle = PlacesMutationPolicy.sanitizeTitle(title)
+        placesApi.getWriter().updateBookmark(safeGuid, null, null, safeTitle, null)
+    }
+
+    fun deleteHistory(url: String, visitedAtMillis: Long) = lifecycle.withOpen {
+        require(visitedAtMillis > 0) { "History visit timestamp is invalid" }
+        placesApi.getWriter().deleteVisit(url, visitedAtMillis)
+    }
+
+    fun deleteBookmark(guid: String): Boolean = lifecycle.withOpen {
+        placesApi.getWriter().deleteBookmarkNode(
+            PlacesMutationPolicy.requireSyncGuid(guid),
         )
-    }
-
-    fun saveBookmark(url: String, title: String) = lifecycle.withOpen {
-        val writer = placesApi.getWriter()
-        if (writer.getBookmarksWithURL(url).isEmpty()) {
-            writer.createBookmarkItem(BookmarkRoot.Mobile.id, url, title.ifBlank { url })
-        }
-    }
-
-    fun deleteHistory(url: String) = lifecycle.withOpen {
-        placesApi.getWriter().deleteVisitsFor(url)
-    }
-
-    fun deleteBookmark(url: String) = lifecycle.withOpen {
-        val writer = placesApi.getWriter()
-        writer.getBookmarksWithURL(url).forEach { item ->
-            val bookmark = item as? BookmarkItem.Bookmark ?: return@forEach
-            writer.deleteBookmarkNode(bookmark.b.guid)
-        }
     }
 
     fun clearHistory() = lifecycle.withOpen {
@@ -303,11 +323,17 @@ class XanhSyncRuntime(
         val reader = placesApi.openReader()
         try {
             val visits = reader.getVisitPage(0, limit.toLong(), emptyList()).map { visit ->
-                PlacesHistoryRecord(visit.url, visit.title.orEmpty(), visit.timestamp)
+                PlacesHistoryRecord(
+                    visit.url,
+                    visit.title.orEmpty(),
+                    visit.timestamp,
+                    visit.isRemote,
+                )
             }
             val bookmarks = reader.getRecentBookmarks(limit).mapNotNull { item ->
                 (item as? BookmarkItem.Bookmark)?.b?.let { bookmark ->
                     PlacesBookmarkRecord(
+                        bookmark.guid,
                         bookmark.url,
                         bookmark.title.orEmpty(),
                         bookmark.dateAdded,

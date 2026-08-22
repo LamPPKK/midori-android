@@ -21,6 +21,10 @@
     <string name="desktop_site">Desktop site</string>
     <string name="add_bookmark">Add bookmark</string>
     <string name="bookmark_saved">Bookmark saved</string>
+    <string name="rename_bookmark">Rename bookmark</string>
+    <string name="bookmark_title">Bookmark title</string>
+    <string name="bookmark_rename_failed">Bookmark could not be renamed</string>
+    <string name="browser_data_delete_failed">Browser data could not be deleted</string>
     <string name="bookmarks">Bookmarks</string>
     <string name="history">History</string>
     <string name="downloads">Downloads</string>

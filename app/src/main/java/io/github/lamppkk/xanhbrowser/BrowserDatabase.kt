@@ -11,6 +11,10 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "tabs")
@@ -23,20 +27,29 @@ data class BrowserTab(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
-@Entity(tableName = "history", indices = [Index(value = ["url"], unique = true)])
+@Entity(
+    tableName = "history",
+    indices = [Index(value = ["url"]), Index(value = ["url", "syncTimestampMillis"])],
+)
 data class HistoryEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val url: String,
     val title: String,
     val visitedAt: Long = System.currentTimeMillis(),
+    val syncTimestampMillis: Long = 0,
+    val syncIsRemote: Boolean = false,
 )
 
-@Entity(tableName = "bookmarks", indices = [Index(value = ["url"], unique = true)])
+@Entity(
+    tableName = "bookmarks",
+    indices = [Index(value = ["url"]), Index(value = ["syncGuid"])],
+)
 data class Bookmark(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val url: String,
     val title: String,
     val createdAt: Long = System.currentTimeMillis(),
+    val syncGuid: String = "",
 )
 
 @Entity(tableName = "downloads")
@@ -94,8 +107,27 @@ interface HistoryDao {
     @Query("SELECT * FROM history WHERE id = :id LIMIT 1")
     suspend fun get(id: Long): HistoryEntry?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun record(entry: HistoryEntry)
+    @Query("SELECT * FROM history WHERE url = :url AND syncTimestampMillis = :timestamp LIMIT 1")
+    suspend fun getBySyncIdentity(url: String, timestamp: Long): HistoryEntry?
+
+    @Query("SELECT * FROM history WHERE url = :url AND visitedAt = :visitedAt AND syncTimestampMillis = 0 LIMIT 1")
+    suspend fun getPending(url: String, visitedAt: Long): HistoryEntry?
+
+    @Insert
+    suspend fun insert(entry: HistoryEntry): Long
+
+    @Update
+    suspend fun update(entry: HistoryEntry)
+
+    @Transaction
+    suspend fun record(entry: HistoryEntry) {
+        val existing = if (entry.syncTimestampMillis > 0) {
+            getBySyncIdentity(entry.url, entry.syncTimestampMillis)
+        } else {
+            getPending(entry.url, entry.visitedAt)
+        }
+        if (existing == null) insert(entry) else update(entry.copy(id = existing.id))
+    }
 
     @Query("DELETE FROM history WHERE id = :id")
     suspend fun delete(id: Long)
@@ -115,8 +147,30 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE id = :id LIMIT 1")
     suspend fun get(id: Long): Bookmark?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun save(bookmark: Bookmark)
+    @Query("SELECT * FROM bookmarks WHERE syncGuid = :syncGuid LIMIT 1")
+    suspend fun getBySyncGuid(syncGuid: String): Bookmark?
+
+    @Query("SELECT * FROM bookmarks WHERE url = :url AND syncGuid = '' LIMIT 1")
+    suspend fun getPending(url: String): Bookmark?
+
+    @Insert
+    suspend fun insert(bookmark: Bookmark): Long
+
+    @Update
+    suspend fun update(bookmark: Bookmark)
+
+    @Transaction
+    suspend fun save(bookmark: Bookmark) {
+        val existing = if (bookmark.syncGuid.isNotEmpty()) {
+            getBySyncGuid(bookmark.syncGuid)
+        } else {
+            getPending(bookmark.url)
+        }
+        if (existing == null) insert(bookmark) else update(bookmark.copy(id = existing.id))
+    }
+
+    @Query("UPDATE bookmarks SET title = :title WHERE id = :id")
+    suspend fun rename(id: Long, title: String): Int
 
     @Query("DELETE FROM bookmarks")
     suspend fun clear()
@@ -151,7 +205,7 @@ interface DownloadDao {
 
 @Database(
     entities = [BrowserTab::class, HistoryEntry::class, Bookmark::class, DownloadRecord::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class BrowserDatabase : RoomDatabase() {
@@ -168,7 +222,60 @@ abstract class BrowserDatabase : RoomDatabase() {
                 context.applicationContext,
                 BrowserDatabase::class.java,
                 "xanh-browser.db",
-            ).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+        }
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `history_v2` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `url` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `visitedAt` INTEGER NOT NULL,
+                        `syncTimestampMillis` INTEGER NOT NULL,
+                        `syncIsRemote` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "INSERT INTO `history_v2` " +
+                        "(`id`, `url`, `title`, `visitedAt`, `syncTimestampMillis`, `syncIsRemote`) " +
+                        "SELECT `id`, `url`, `title`, `visitedAt`, 0, 0 FROM `history`",
+                )
+                db.execSQL("DROP TABLE `history`")
+                db.execSQL("ALTER TABLE `history_v2` RENAME TO `history`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_url` ON `history` (`url`)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_history_url_syncTimestampMillis` " +
+                        "ON `history` (`url`, `syncTimestampMillis`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `bookmarks_v2` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `url` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `syncGuid` TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "INSERT INTO `bookmarks_v2` " +
+                        "(`id`, `url`, `title`, `createdAt`, `syncGuid`) " +
+                        "SELECT `id`, `url`, `title`, `createdAt`, '' FROM `bookmarks`",
+                )
+                db.execSQL("DROP TABLE `bookmarks`")
+                db.execSQL("ALTER TABLE `bookmarks_v2` RENAME TO `bookmarks`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookmarks_url` ON `bookmarks` (`url`)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_bookmarks_syncGuid` " +
+                        "ON `bookmarks` (`syncGuid`)",
+                )
+            }
         }
     }
 }

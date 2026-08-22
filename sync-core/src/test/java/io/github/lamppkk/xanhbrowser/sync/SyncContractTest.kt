@@ -177,6 +177,17 @@ class SyncContractTest {
     }
 
     @Test
+    fun `places mutation policy requires exact guid and byte bounded title`() {
+        assertTrue(PlacesMutationPolicy.isSyncGuid("AbCdEf123_-x"))
+        assertFalse(PlacesMutationPolicy.isSyncGuid("AbCdEf123_-x-extra"))
+        assertFalse(PlacesMutationPolicy.isSyncGuid("AbCdEf123_\nx"))
+        assertEquals("before after", PlacesMutationPolicy.sanitizeTitle("before\nafter"))
+        assertEquals("fallback", PlacesMutationPolicy.sanitizeTitle("\u0000", "fallback"))
+        val emoji = PlacesMutationPolicy.sanitizeTitle("😀".repeat(2_000))
+        assertEquals(PlacesMutationPolicy.MAX_TITLE_BYTES, emoji.toByteArray().size)
+    }
+
+    @Test
     fun `credential policy denies private http and cross origin frames`() {
         val valid = CredentialContext(
             "https://example.org/login",

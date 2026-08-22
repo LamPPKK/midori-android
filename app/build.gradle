@@ -78,6 +78,10 @@ android {
     testOptions {
         unitTests.includeAndroidResources = true
     }
+
+    sourceSets {
+        androidTest.assets.srcDir "$projectDir/schemas"
+    }
 }
 
 tasks.register('verifyReleaseSigning') {

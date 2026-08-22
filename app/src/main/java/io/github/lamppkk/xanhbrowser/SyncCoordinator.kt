@@ -1,5 +1,6 @@
 package io.github.lamppkk.xanhbrowser
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import androidx.work.Constraints
@@ -17,6 +18,7 @@ import io.github.lamppkk.xanhbrowser.sync.AccountServer
 import io.github.lamppkk.xanhbrowser.sync.AccountState
 import io.github.lamppkk.xanhbrowser.sync.LegacyBookmark
 import io.github.lamppkk.xanhbrowser.sync.LegacyHistoryVisit
+import io.github.lamppkk.xanhbrowser.sync.PlacesMutationPolicy
 import io.github.lamppkk.xanhbrowser.sync.SyncConfiguration
 import io.github.lamppkk.xanhbrowser.sync.SyncReason
 import io.github.lamppkk.xanhbrowser.sync.SyncEngine
@@ -29,6 +31,8 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -39,10 +43,12 @@ class SyncCoordinator private constructor(context: Context) {
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     @Volatile private var runtime: XanhSyncRuntime? = null
     @Volatile private var nativeOwnershipUncertain = false
+    private val placesMutex = Mutex()
 
     @Synchronized
     fun configure(configuration: SyncConfiguration) {
         configuration.validate()
+        check(!placesMutex.isLocked) { "A Places workflow is already running" }
         check(!nativeOwnershipUncertain) { "Mozilla Sync native ownership is uncertain" }
         try {
             runtime?.close()
@@ -105,105 +111,183 @@ class SyncCoordinator private constructor(context: Context) {
         runtimeOrNull()?.setEngineEnabled(engine, enabled)
     }
 
-    suspend fun recordHistory(url: String, title: String, visitedAt: Long) = withContext(Dispatchers.IO) {
-        if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.recordHistory(url, title, visitedAt)
+    suspend fun recordPageVisit(tabId: Long, entry: HistoryEntry) = withContext(Dispatchers.IO) {
+        if (!isSyncableWebUrl(entry.url)) {
+            BrowserDatabase.get(appContext).tabs().updatePage(
+                tabId,
+                entry.url,
+                PlacesMutationPolicy.sanitizeTitle(entry.title, entry.url),
+                entry.visitedAt,
+            )
+            return@withContext
+        }
+        placesMutex.withLock {
+            val title = PlacesMutationPolicy.sanitizeTitle(entry.title, entry.url)
+            val syncTimestamp = writeOrQueuePending {
+                recordHistory(entry.url, title, entry.visitedAt)
+                entry.visitedAt
+            } ?: 0
+            val database = BrowserDatabase.get(appContext)
+            database.withTransaction {
+                database.tabs().updatePage(tabId, entry.url, title, entry.visitedAt)
+                database.history().record(
+                    entry.copy(
+                        title = title,
+                        syncTimestampMillis = syncTimestamp,
+                        syncIsRemote = false,
+                    ),
+                )
+            }
+        }
     }
 
-    suspend fun saveBookmark(url: String, title: String) = withContext(Dispatchers.IO) {
-        if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.saveBookmark(url, title)
+    suspend fun saveBookmark(bookmark: Bookmark) = withContext(Dispatchers.IO) {
+        if (!isSyncableWebUrl(bookmark.url)) return@withContext
+        placesMutex.withLock {
+            val title = PlacesMutationPolicy.sanitizeTitle(bookmark.title, bookmark.url)
+            val syncGuid = writeOrQueuePending { saveBookmark(bookmark.url, title) }.orEmpty()
+            BrowserDatabase.get(appContext).bookmarks().save(
+                bookmark.copy(title = title, syncGuid = syncGuid),
+            )
+        }
     }
 
-    suspend fun deleteHistory(url: String) = withContext(Dispatchers.IO) {
-        if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.deleteHistory(url)
+    suspend fun deleteHistory(id: Long) = withContext(Dispatchers.IO) {
+        placesMutex.withLock {
+            val dao = BrowserDatabase.get(appContext).history()
+            val existing = dao.get(id) ?: return@withLock
+            if (existing.syncTimestampMillis > 0) {
+                requireNotNull(runtimeOrNull()) {
+                    "Places is unavailable; exact history deletion was not applied"
+                }.deleteHistory(existing.url, existing.syncTimestampMillis)
+            } else {
+                invalidatePendingMigration()
+            }
+            dao.delete(id)
+        }
     }
 
-    suspend fun deleteBookmark(url: String) = withContext(Dispatchers.IO) {
-        if (!isSyncableWebUrl(url)) return@withContext
-        runtimeOrNull()?.deleteBookmark(url)
+    suspend fun deleteBookmark(id: Long) = withContext(Dispatchers.IO) {
+        placesMutex.withLock {
+            val dao = BrowserDatabase.get(appContext).bookmarks()
+            val existing = dao.get(id) ?: return@withLock
+            if (existing.syncGuid.isNotEmpty()) {
+                val guid = PlacesMutationPolicy.requireSyncGuid(existing.syncGuid)
+                requireNotNull(runtimeOrNull()) {
+                    "Places is unavailable; exact bookmark deletion was not applied"
+                }.deleteBookmark(guid)
+            } else {
+                invalidatePendingMigration()
+            }
+            dao.delete(id)
+        }
+    }
+
+    suspend fun renameBookmark(id: Long, title: String): String = withContext(Dispatchers.IO) {
+        placesMutex.withLock {
+            val dao = BrowserDatabase.get(appContext).bookmarks()
+            val existing = requireNotNull(dao.get(id)) { "Bookmark no longer exists" }
+            val safeTitle = PlacesMutationPolicy.sanitizeTitle(title, existing.url)
+            if (existing.syncGuid.isNotEmpty()) {
+                val guid = PlacesMutationPolicy.requireSyncGuid(existing.syncGuid)
+                requireNotNull(runtimeOrNull()) {
+                    "Places is unavailable; bookmark rename was not applied"
+                }.renameBookmark(guid, safeTitle)
+            } else {
+                invalidatePendingMigration()
+            }
+            check(dao.rename(id, safeTitle) == 1) { "Bookmark changed during rename" }
+            safeTitle
+        }
     }
 
     suspend fun clearHistory() = withContext(Dispatchers.IO) {
-        runtimeOrNull()?.clearHistory()
+        placesMutex.withLock {
+            val active = runtimeOrNull()
+            if (active == null) invalidatePendingMigration() else active.clearHistory()
+            BrowserDatabase.get(appContext).history().clear()
+        }
     }
 
     suspend fun sync(reason: SyncReason): SyncSnapshot = withContext(Dispatchers.IO) {
-        val runtime = requireNotNull(runtimeOrNull())
-        if (!runtime.isSyncDue(reason)) return@withContext runtime.snapshot()
-        migrateLegacyDataOnce(runtime)
-        val tabs = BrowserDatabase.get(appContext).tabs().getAll()
-            .filter { isSyncableWebUrl(it.url) }
-            .mapIndexed { index, tab ->
-                RemoteTabRecord(
-                    title = tab.title.ifBlank { tab.url },
-                    urlHistory = listOf(tab.url),
-                    icon = null,
-                    lastUsed = tab.updatedAt,
-                    inactive = false,
-                    pinned = false,
-                    index = index.toUInt(),
-                    windowId = "",
-                    tabGroupId = "",
-                )
-            }
-        runtime.setLocalTabs(tabs)
-        runtime.sync(reason).also { refreshPlacesCompatibilityMirror(runtime) }
+        placesMutex.withLock {
+            val runtime = requireNotNull(runtimeOrNull())
+            if (!runtime.isSyncDue(reason)) return@withLock runtime.snapshot()
+            migrateLegacyDataOnce(runtime)
+            val tabs = BrowserDatabase.get(appContext).tabs().getAll()
+                .filter { isSyncableWebUrl(it.url) }
+                .mapIndexed { index, tab ->
+                    RemoteTabRecord(
+                        title = tab.title.ifBlank { tab.url },
+                        urlHistory = listOf(tab.url),
+                        icon = null,
+                        lastUsed = tab.updatedAt,
+                        inactive = false,
+                        pinned = false,
+                        index = index.toUInt(),
+                        windowId = "",
+                        tabGroupId = "",
+                    )
+                }
+            runtime.setLocalTabs(tabs)
+            runtime.sync(reason).also { refreshPlacesCompatibilityMirror(runtime) }
+        }
     }
 
     fun lockVault() = runtimeOrNull()?.lockVault()
 
     suspend fun disconnect(deleteLocal: Boolean) = withContext(Dispatchers.IO) {
-        synchronized(this@SyncCoordinator) {
-            val active = runtimeOrNull()
-            check(!nativeOwnershipUncertain) {
-                "Cannot delete Sync data while native ownership is uncertain"
-            }
-            var failure: Throwable? = null
-            try {
-                active?.disconnect(deleteLocal)
-            } catch (error: Throwable) {
-                failure = error
-            }
+        placesMutex.withLock {
+            synchronized(this@SyncCoordinator) {
+                val active = runtimeOrNull()
+                check(!nativeOwnershipUncertain) {
+                    "Cannot delete Sync data while native ownership is uncertain"
+                }
+                var failure: Throwable? = null
+                try {
+                    active?.disconnect(deleteLocal)
+                } catch (error: Throwable) {
+                    failure = error
+                }
 
-            var closedCleanly = false
-            try {
-                active?.close()
-                closedCleanly = true
-            } catch (closeError: Throwable) {
-                nativeOwnershipUncertain = true
-                val first = failure
-                if (first == null) failure = closeError else first.addSuppressed(closeError)
-            }
+                var closedCleanly = false
+                try {
+                    active?.close()
+                    closedCleanly = true
+                } catch (closeError: Throwable) {
+                    nativeOwnershipUncertain = true
+                    val first = failure
+                    if (first == null) failure = closeError else first.addSuppressed(closeError)
+                }
 
-            if (closedCleanly) {
-                nativeOwnershipUncertain = false
-                if (runtime === active) runtime = null
-                if (deleteLocal) {
-                    fun cleanup(block: () -> Unit) {
-                        try {
-                            block()
-                        } catch (cleanupError: Throwable) {
-                            val first = failure
-                            if (first == null) failure = cleanupError else first.addSuppressed(cleanupError)
+                if (closedCleanly) {
+                    nativeOwnershipUncertain = false
+                    if (runtime === active) runtime = null
+                    if (deleteLocal) {
+                        fun cleanup(block: () -> Unit) {
+                            try {
+                                block()
+                            } catch (cleanupError: Throwable) {
+                                val first = failure
+                                if (first == null) failure = cleanupError else first.addSuppressed(cleanupError)
+                            }
                         }
-                    }
-                    cleanup { XanhSyncRuntime.deleteLocalData(appContext) }
-                    cleanup {
-                        check(preferences.edit().clear().commit()) {
-                            "Failed to clear Firefox Sync preferences"
+                        cleanup { XanhSyncRuntime.deleteLocalData(appContext) }
+                        cleanup {
+                            check(preferences.edit().clear().commit()) {
+                                "Failed to clear Firefox Sync preferences"
+                            }
                         }
-                    }
-                    cleanup {
-                        val migration = File(appContext.noBackupFilesDir, "sync-migration")
-                        check(!migration.exists() || migration.deleteRecursively()) {
-                            "Failed to remove Firefox Sync migration backup"
+                        cleanup {
+                            val migration = File(appContext.noBackupFilesDir, "sync-migration")
+                            check(!migration.exists() || migration.deleteRecursively()) {
+                                "Failed to remove Firefox Sync migration backup"
+                            }
                         }
                     }
                 }
+                failure?.let { throw it }
             }
-            failure?.let { throw it }
         }
     }
 
@@ -284,11 +368,45 @@ class SyncCoordinator private constructor(context: Context) {
             !uri.host.isNullOrBlank() && uri.userInfo == null
     }.getOrDefault(false)
 
+    private fun <T> writeOrQueuePending(operation: XanhSyncRuntime.() -> T): T? {
+        val active = runtimeOrNull()
+        if (active == null) {
+            invalidatePendingMigration()
+            return null
+        }
+        return try {
+            active.operation()
+        } catch (_: Exception) {
+            // The native operation can fail after a partial local commit. A
+            // write-ahead invalidation makes the idempotent legacy importer
+            // reconcile the compatibility row on the next successful Sync.
+            invalidatePendingMigration()
+            null
+        }
+    }
+
+    @SuppressLint("UseKtx")
+    private fun invalidatePendingMigration() {
+        if (!preferences.contains(MIGRATION_COMPLETE) &&
+            !preferences.contains(MIGRATION_CHECKSUM)
+        ) {
+            return
+        }
+        // KTX edit(commit = true) discards commit()'s boolean result. Keep the
+        // explicit call so Room is never changed after a failed write-ahead.
+        check(
+            preferences.edit()
+                .remove(MIGRATION_COMPLETE)
+                .remove(MIGRATION_CHECKSUM)
+                .commit(),
+        ) { "Failed to persist pending Places migration intent" }
+    }
+
     private suspend fun migrateLegacyDataOnce(runtime: XanhSyncRuntime) {
         if (preferences.getBoolean(MIGRATION_COMPLETE, false)) return
         val database = BrowserDatabase.get(appContext)
-        val bookmarks = database.bookmarks().getAll()
-        val history = database.history().getAll()
+        val bookmarks = database.bookmarks().getAll().filter { it.syncGuid.isEmpty() }
+        val history = database.history().getAll().filter { it.syncTimestampMillis == 0L }
         val snapshot = JSONObject().apply {
             put("schema", 1)
             put("bookmarks", JSONArray(bookmarks.map { JSONObject().put("url", it.url).put("title", it.title) }))
@@ -334,6 +452,8 @@ class SyncCoordinator private constructor(context: Context) {
                         url = visit.url,
                         title = visit.title,
                         visitedAt = visit.visitedAt,
+                        syncTimestampMillis = visit.visitedAt,
+                        syncIsRemote = visit.isRemote,
                     ),
                 )
             }
@@ -344,6 +464,7 @@ class SyncCoordinator private constructor(context: Context) {
                         url = bookmark.url,
                         title = bookmark.title,
                         createdAt = bookmark.createdAt,
+                        syncGuid = bookmark.guid,
                     ),
                 )
             }

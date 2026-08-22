@@ -15,6 +15,14 @@
         <TextView android:id="@+id/itemSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/xanh_muted" />
     </LinearLayout>
     <ImageButton
+        android:id="@+id/editItem"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/rename_bookmark"
+        android:src="@drawable/ic_edit_24dp"
+        android:visibility="gone" />
+    <ImageButton
         android:id="@+id/deleteItem"
         android:layout_width="48dp"
         android:layout_height="48dp"

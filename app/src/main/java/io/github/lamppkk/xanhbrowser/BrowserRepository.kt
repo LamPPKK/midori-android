@@ -6,21 +6,11 @@ import kotlinx.coroutines.flow.Flow
 
 class BrowserRepository internal constructor(
     private val database: BrowserDatabase,
-    private val onLocalChange: suspend () -> Unit = {},
-    private val onHistoryRecorded: suspend (String, String, Long) -> Unit = { _, _, _ -> },
-    private val onBookmarkSaved: suspend (String, String) -> Unit = { _, _ -> },
-    private val onHistoryDeleted: suspend (String) -> Unit = {},
-    private val onBookmarkDeleted: suspend (String) -> Unit = {},
-    private val onHistoryCleared: suspend () -> Unit = {},
+    private val syncCoordinator: SyncCoordinator? = null,
 ) {
     constructor(context: Context) : this(
         BrowserDatabase.get(context),
-        { SyncCoordinator.get(context).recordLocalChange() },
-        { url, title, visitedAt -> SyncCoordinator.get(context).recordHistory(url, title, visitedAt) },
-        { url, title -> SyncCoordinator.get(context).saveBookmark(url, title) },
-        { url -> SyncCoordinator.get(context).deleteHistory(url) },
-        { url -> SyncCoordinator.get(context).deleteBookmark(url) },
-        { SyncCoordinator.get(context).clearHistory() },
+        SyncCoordinator.get(context),
     )
 
     val tabs: Flow<List<BrowserTab>> = database.tabs().observeAll()
@@ -67,36 +57,52 @@ class BrowserRepository internal constructor(
 
     suspend fun updatePage(id: Long, url: String, title: String) {
         val visitedAt = System.currentTimeMillis()
-        database.withTransaction {
-            database.tabs().updatePage(id, url, title)
-            if (url.startsWith("http://") || url.startsWith("https://")) {
-                database.history().record(HistoryEntry(url = url, title = title, visitedAt = visitedAt))
-            }
-        }
         if (url.startsWith("http://") || url.startsWith("https://")) {
-            onHistoryRecorded(url, title, visitedAt)
+            val entry = HistoryEntry(url = url, title = title, visitedAt = visitedAt)
+            if (syncCoordinator == null) {
+                database.withTransaction {
+                    database.tabs().updatePage(id, url, title, visitedAt)
+                    database.history().record(entry)
+                }
+            } else {
+                syncCoordinator.recordPageVisit(id, entry)
+            }
+        } else {
+            database.tabs().updatePage(id, url, title, visitedAt)
         }
-        onLocalChange()
+        syncCoordinator?.recordLocalChange()
     }
 
     suspend fun saveBookmark(url: String, title: String) {
-        database.bookmarks().save(Bookmark(url = url, title = title))
-        onBookmarkSaved(url, title)
-        onLocalChange()
+        val bookmark = Bookmark(url = url, title = title)
+        if (syncCoordinator == null) database.bookmarks().save(bookmark)
+        else syncCoordinator.saveBookmark(bookmark)
+        syncCoordinator?.recordLocalChange()
     }
 
     suspend fun deleteHistory(id: Long) {
-        val existing = database.history().get(id)
-        database.history().delete(id)
-        existing?.let { onHistoryDeleted(it.url) }
-        onLocalChange()
+        if (syncCoordinator == null) database.history().delete(id)
+        else syncCoordinator.deleteHistory(id)
+        syncCoordinator?.recordLocalChange()
     }
 
     suspend fun deleteBookmark(id: Long) {
-        val existing = database.bookmarks().get(id)
-        database.bookmarks().delete(id)
-        existing?.let { onBookmarkDeleted(it.url) }
-        onLocalChange()
+        if (syncCoordinator == null) database.bookmarks().delete(id)
+        else syncCoordinator.deleteBookmark(id)
+        syncCoordinator?.recordLocalChange()
+    }
+
+    suspend fun renameBookmark(id: Long, title: String): String {
+        val renamed = if (syncCoordinator == null) {
+            val existing = requireNotNull(database.bookmarks().get(id))
+            val safeTitle = title.trim().ifEmpty { existing.url }
+            check(database.bookmarks().rename(id, safeTitle) == 1)
+            safeTitle
+        } else {
+            syncCoordinator.renameBookmark(id, title)
+        }
+        syncCoordinator?.recordLocalChange()
+        return renamed
     }
 
     suspend fun saveDownload(id: Long, url: String, fileName: String) {
@@ -114,14 +120,14 @@ class BrowserRepository internal constructor(
     suspend fun deleteDownload(id: Long) = database.downloads().delete(id)
 
     suspend fun clearPrivateData(homeUrl: String): BrowserTab {
+        syncCoordinator?.clearHistory()
         val tab = database.withTransaction {
             database.history().clear()
             database.downloads().clear()
             database.tabs().clear()
             createTabInternal(homeUrl)
         }
-        onHistoryCleared()
-        onLocalChange()
+        syncCoordinator?.recordLocalChange()
         return tab
     }
 }

@@ -33,7 +33,9 @@ rejected rather than treated as production updates.
 ## Current capabilities
 
 - Independent multi-tab browsing with safe process-death restoration
-- Room-backed history, bookmarks and download records with a versioned schema
+- Room-backed history, bookmarks and download records with a versioned schema;
+  its schema-v2 compatibility mirror preserves exact Places bookmark GUIDs and
+  visit timestamps for mutation
 - Browser library for browsing and managing saved data
 - Phone, tablet and foldable layouts using XML Views and View Binding
 - Back/forward navigation, predictive back, sharing and desktop mode
@@ -160,6 +162,15 @@ suggestions require a recent trusted user gesture and an unlocked vault; the run
 returns only bounded form credentials matching the exact canonical HTTPS
 origin.
 
+The Room compatibility mirror does not infer Sync identity from URL. Native
+bookmarks retain their 12-character Places GUID, duplicate URLs remain separate,
+and history retains the exact millisecond visit identity plus its remote flag.
+Library rename/delete therefore creates only the selected upstream mutation.
+Rows written while Places is unavailable keep an empty identity and synchronously
+invalidate the migration marker before Room changes, so the next successful
+single-flight Sync imports them instead of silently replacing them with an old
+mirror.
+
 ## Project structure
 
 | Path | Purpose |
@@ -173,7 +184,7 @@ origin.
 | `app/src/main/.../AddressResolver.kt` | Validated address and search resolution |
 | `backup-core/` | Portable encrypted backup codec and cross-platform vectors |
 | `sync-core/` | Pinned Mozilla Application Services Android integration |
-| `app/schemas/` | Exported Room migration schema |
+| `app/schemas/` | Exported Room schemas and the tested 1→2 migration contract |
 | `app/src/test/` | Local unit tests |
 | `app/src/androidTest/` | Activity and database instrumentation tests |
 | `fastlane/` | Google Play listing metadata |

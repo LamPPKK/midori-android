@@ -18,6 +18,10 @@
   an authenticated Xanh-only password vault using Application Services 155.0.
 - Added idempotent Room-to-Places migration, WorkManager scheduling, OAuth
   Custom Tabs and an origin/nonce-validated WebView credential bridge.
+- Added schema-v2 Places identities to the Room compatibility mirror. Bookmark
+  rename/delete now targets the exact GUID, history deletion targets the exact
+  URL/timestamp visit, duplicate bookmark URLs remain distinct, and failed or
+  offline writes persist a migration retry intent before changing Room.
 - Added checksum-verified dependencies, guarded Sync release modes and a
   documented implementation-status record for interoperability and security
   evidence.
@@ -34,6 +38,9 @@
   `io.github.lamppkk.xanhbrowser` and version code `10000`.
 - Rebuilt the project with AGP 9.3, Gradle 9.5, JDK 17, built-in Kotlin,
   AndroidX, Material, XML Views, View Binding and Room.
+- Migrated the Room browser database from schema 1 to schema 2 without
+  discarding existing history/bookmarks; migrated rows become pending Places
+  records until the idempotent importer assigns native identities.
 - Raised the supported platform range to API 26–36 and added adaptive layouts.
 - Moved downloads to DownloadManager and scoped storage.
 - Updated the AndroidX WebKit compatibility layer to stable 1.17.0.

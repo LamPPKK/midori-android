@@ -25,14 +25,21 @@ internal class PlacesMigration(private val places: PlacesApi) {
             bookmarkCount++
         }
         history.distinctBy { it.url to it.visitedAtMillis }.forEach { visit ->
-            writer.noteObservation(
-                VisitObservation(
-                    url = visit.url,
-                    title = visit.title,
-                    visitType = VisitType.LINK,
-                    at = visit.visitedAtMillis,
-                ),
-            )
+            val exists = writer.getVisitInfos(
+                visit.visitedAtMillis,
+                visit.visitedAtMillis,
+                emptyList(),
+            ).any { existing -> existing.url == visit.url }
+            if (!exists) {
+                writer.noteObservation(
+                    VisitObservation(
+                        url = visit.url,
+                        title = PlacesMutationPolicy.sanitizeTitle(visit.title, visit.url),
+                        visitType = VisitType.LINK,
+                        at = visit.visitedAtMillis,
+                    ),
+                )
+            }
         }
         return MigrationCounts(bookmarkCount, history.distinctBy { it.url to it.visitedAtMillis }.size)
     }

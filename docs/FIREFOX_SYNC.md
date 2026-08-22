@@ -38,6 +38,18 @@ idempotently and records the verified counts and SHA-256 marker. Open tabs and
 downloads remain in Room. Remote tabs are listed by device and are never opened
 automatically.
 
+Room schema 2 preserves each native bookmark GUID and each history visit's
+exact millisecond timestamp/remote bit. The library sends bookmark rename and
+delete by GUID and deletes one history visit by URL plus timestamp; it never
+uses URL alone as a native deletion identity. Duplicate bookmark URLs therefore
+remain independently manageable. Schema-1 rows migrate with an empty identity
+and are treated as pending legacy input. When a native write is unavailable or
+fails, Xanh commits migration-marker invalidation before changing the pending
+Room row. Sync and local Places mutations share one coordinator mutex, so a
+mirror refresh cannot commit between that write-ahead intent and the Room
+mutation. History import checks URL plus timestamp before insertion and is safe
+to retry after a partial native commit.
+
 All four engines are enabled on a device by default. A device switch only
 changes that device's selection. WorkManager handles connected background
 work; foreground work is limited to once per 15 minutes, local changes are
@@ -89,10 +101,10 @@ redaction review, FFI/message fuzzing, an SBOM and an independent security
 review. Credentials used by staging tests must never be stored in Git or CI
 logs.
 
-## Implementation snapshot (2026-08-22)
+## Implementation snapshot (2026-08-23)
 
 The Android implementation builds against the checksum-verified Application
-Services 155.0 AARs. Local verification currently passes 22 JVM tests across
+Services 155.0 AARs. Local verification currently passes 25 JVM tests across
 the backup, Sync and browser modules; Android lint completes without errors;
 and the app plus Sync instrumentation APKs compile. The production bundle task
 remains guarded by explicit Sync mode, Mozilla approval and signing inputs.
@@ -102,6 +114,9 @@ state, authenticated vault unlock and background lock, idempotent
 Room-to-Places migration, all four Sync engines, WorkManager scheduling,
 remote-tab presentation and an AndroidX WebKit document-start credential
 bridge with exact-origin, tab, navigation-nonce and recent-user-gesture checks.
+The schema-v2 mirror carries exact Places mutation identities, exposes native
+bookmark rename, and keeps offline rows pending under a crash-safe write-ahead
+migration intent.
 Credential results are bounded and filtered inside the Sync runtime before the
 native chooser receives them. “Delete from this device” removes local engine
 databases even when account restoration fails.

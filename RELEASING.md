@@ -53,6 +53,10 @@ Gradle project files, build logs or release attachments.
 3. Confirm the Play listing and changelog under `fastlane/metadata/android/`.
 4. Require green Android, CodeQL and dependency-review workflows for the exact
    candidate commit.
+5. Run `python3 scripts/verify_androidx_webkit_latest.py` with network access
+   and confirm the Gradle pin plus strict dependency checksums match the newest
+   stable release in official Google Maven metadata. Prereleases never satisfy
+   this production gate.
 
 Verification:
 

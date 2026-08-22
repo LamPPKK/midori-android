@@ -10,3 +10,5 @@
 **/build/
 /captures
 .externalNativeBuild
+__pycache__/
+*.py[cod]

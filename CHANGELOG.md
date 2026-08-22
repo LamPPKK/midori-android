@@ -12,6 +12,8 @@
 - Added unit and instrumentation tests plus build, device-matrix, CodeQL and
   dependency-review GitHub Actions workflows.
 - Added Google Play listing metadata and a guarded production-signing task.
+- Added a scheduled, Google Maven-backed verifier that rejects stale,
+  prerelease/dynamic or checksum-incomplete AndroidX WebKit dependency pins.
 - Added Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs and
   an authenticated Xanh-only password vault using Application Services 155.0.
 - Added idempotent Room-to-Places migration, WorkManager scheduling, OAuth

@@ -25,6 +25,11 @@ is bundled in the application.
 This is a new application ID. Installation starts with an empty profile and
 does not import data from the legacy Android application.
 
+The scheduled AndroidX WebKit baseline workflow reads official Google Maven
+metadata weekly and fails if a shipping Gradle pin or its strict AAR/module
+checksums lag the newest stable release. Alpha, beta, RC and dynamic pins are
+rejected rather than treated as production updates.
+
 ## Current capabilities
 
 - Independent multi-tab browsing with safe process-death restoration

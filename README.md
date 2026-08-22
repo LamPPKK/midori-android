@@ -20,6 +20,7 @@ is bundled in the application.
 | Compile and target SDK | API 36 |
 | Java runtime | JDK 17 |
 | Build system | Android Gradle Plugin 9.3, Gradle 9.5, built-in Kotlin |
+| WebView compatibility layer | AndroidX WebKit 1.17.0 stable |
 
 This is a new application ID. Installation starts with an empty profile and
 does not import data from the legacy Android application.
@@ -34,11 +35,14 @@ does not import data from the legacy Android application.
 - Downloads through Android DownloadManager and scoped storage
 - File upload and per-origin geolocation consent through Activity Result APIs
 - Checked external-scheme handoff for supported main-frame user actions
-- Asynchronous privacy clearing and WebView render-process recovery
+- Asynchronous privacy clearing and bounded, foreground-only WebView
+  render-process recovery with exact dead-view teardown
 - Password-encrypted portable backup for regular tabs, compatible with the
   Lite, Android WebKit preview and Windows editions
 - Optional Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs
   and an authenticated, Xanh-only password vault
+- Private browsing in a random AndroidX WebKit profile isolated from the
+  regular profile, Room, Sync, credential filling and portable backup
 
 ## Security and privacy defaults
 
@@ -52,6 +56,18 @@ does not import data from the legacy Android application.
   private Gradle properties and must never enter Git.
 - Portable backups use PBKDF2-HMAC-SHA256 and AES-256-GCM, reject unsafe URLs
   and never contain cookies, passwords, cache or private browsing state.
+- Private browsing is offered only when the installed System WebView exposes
+  AndroidX `MULTI_PROFILE`; unsupported providers fail closed instead of using
+  the regular cookie/storage profile. Private URLs are never written to Room,
+  Xanh opts the private hierarchy out of Android Autofill/content capture and
+  requests no IME personalized learning; OS provider/IME compliance remains
+  platform-controlled. Its network user agent is identical to regular browsing. The
+  ephemeral profile is deleted after its Activity is destroyed or cleaned as
+  stale at the next process start. Explicitly downloaded files remain on the
+  device after the private session closes. Renderer recovery is foreground-only
+  and stops after one automatic attempt. A private download is retained only
+  after native confirmation; both the file and its system DownloadManager record
+  can remain.
 
 JavaScript is enabled because modern websites require it. The WebView boundary,
 URI validation and permission checks are therefore part of the release security
@@ -144,7 +160,8 @@ origin.
 | Path | Purpose |
 | --- | --- |
 | `app/src/main/.../BrowserActivity.kt` | Main browser UI and WebView lifecycle |
-| `app/src/main/.../ActivityTabs.kt` | Tab overview and tab actions |
+| `app/src/main/.../ActivityTabs.kt` | Regular-tab overview and tab actions |
+| `app/src/main/.../PrivateBrowserActivity.kt` | Ephemeral isolated-profile browsing |
 | `app/src/main/.../BrowserDatabase.kt` | Room entities, DAOs and schema |
 | `app/src/main/.../BrowserRepository.kt` | Persistence and session operations |
 | `app/src/main/.../LibraryActivity.kt` | History, bookmark and download library |

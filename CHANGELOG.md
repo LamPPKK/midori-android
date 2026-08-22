@@ -19,6 +19,12 @@
 - Added checksum-verified dependencies, guarded Sync release modes and a
   documented implementation-status record for interoperability and security
   evidence.
+- Added fail-closed private browsing backed by a random AndroidX WebKit profile;
+  private pages never enter Room, Sync, Xanh credential filling or portable
+  backup. Xanh opts the surface out of Autofill/content capture, requests no IME
+  personalization and uses the same UA as regular mode.
+- Bound private renderer recovery to one foreground attempt and cancel stale
+  file/geolocation callbacks before destroying the failed WebView.
 
 ### Changed
 
@@ -28,6 +34,10 @@
   AndroidX, Material, XML Views, View Binding and Room.
 - Raised the supported platform range to API 26–36 and added adaptive layouts.
 - Moved downloads to DownloadManager and scoped storage.
+- Updated the AndroidX WebKit compatibility layer to stable 1.17.0.
+- Hardened regular and private renderer termination handling: detach the exact
+  failed WebView without calling back into it, abandon stale credential/file/
+  location callbacks, recover only in foreground and stop after one attempt.
 
 ### Security
 
@@ -50,6 +60,8 @@
 - Restricted credential suggestions to bounded exact-origin form records,
   rejected malformed metadata, and required a recent pointer or keyboard
   trusted gesture before a page can request the native chooser.
+- Isolated private cookies, cache, service workers and storage from the regular
+  WebView profile and delete orphaned private profiles on process startup.
 
 ### Removed
 

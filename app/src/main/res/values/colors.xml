@@ -4,5 +4,6 @@
     <color name="xanh_surface">#F4FBF7</color>
     <color name="xanh_ink">#112B22</color>
     <color name="xanh_muted">#60766E</color>
+    <color name="xanh_private">#16231E</color>
     <color name="white">#FFFFFF</color>
 </resources>

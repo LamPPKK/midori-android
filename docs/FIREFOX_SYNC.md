@@ -64,6 +64,12 @@ bounded form records for the exact
 canonical origin before decrypting them into the chooser. Filling requires an
 explicit user selection, an unlocked vault and an unchanged navigation. Private
 mode, HTTP, URL userinfo, HTTP-auth records and cross-origin frames are denied.
+The private browser uses a separate random AndroidX WebKit profile and never
+constructs the Sync credential bridge or a Room repository, so private URLs and
+credentials cannot reach any Sync engine. Xanh opts that hierarchy out of
+Android Autofill/content capture and requests no IME personalized learning;
+provider/IME compliance remains platform-controlled. The feature fails closed
+when the installed System WebView lacks `MULTI_PROFILE` support.
 
 Tokens, scoped keys, account state and passwords are excluded from logs and
 `.xanhbackup`. “Delete from this device” removes encrypted account state, sync

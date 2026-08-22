@@ -24,6 +24,8 @@ new and intentionally starts with an empty profile.
 - JDK 17, Android SDK Platform 36 and Build Tools 36.0.0
 - API 26, 30, 33 and 36 devices/emulators, including phone, tablet and foldable
 - Multiple supported stable System WebView versions for compatibility checks
+- A System WebView exposing AndroidX `MULTI_PROFILE` for private-mode
+  acceptance; unsupported providers must show the fail-closed message
 - Access to the dedicated Google Play listing, internal/closed tracks and
   pre-launch report
 - A dedicated upload key enrolled in Play App Signing
@@ -105,6 +107,28 @@ versions. At minimum, verify navigation, back/forward and predictive back,
 rotation, process death, multi-tab recovery, downloads, sharing, external
 schemes, file upload, per-origin geolocation consent, privacy clearing and an
 encrypted backup round-trip through Google Drive or another Documents provider.
+For a regular tab, force renderer termination in foreground and background;
+confirm exact-view teardown, stale credential/file/location cancellation, no
+background reload, one automatic recovery at most, and a stable stopped state
+after a repeated crash.
+Open private browsing with a provider that supports `MULTI_PROFILE`, verify its
+cookies/storage are invisible to regular tabs, rotate the Activity, close it,
+and confirm the random profile is deleted. Kill the process mid-session and
+confirm the next cold start deletes the orphaned profile before opening a page.
+Repeat once with an unsupported provider and confirm no private page is loaded
+through the default profile. Confirm private URLs never enter Room, history,
+Sync, framework saved state, Xanh credential suggestions or `.xanhbackup`.
+Inspect the private hierarchy flags that opt out of Autofill/content capture and
+request no IME personalization, while treating external provider compliance as
+platform-controlled; confirm the regular and private user agents match.
+Force renderer termination in foreground and background: the dead WebView and
+stale file/location callbacks must be destroyed immediately, at most one
+foreground recovery may run, and a second failure must close rather than loop.
+The only automatic persistent private-session output from Xanh is a
+native-confirmed download; verify the confirmation appears before enqueue and
+clearly covers both the file and the persistent system DownloadManager
+record/source metadata. User-initiated Share and external-app handoffs disclose
+their selected URL to the chosen target, which controls its own retention.
 
 Import the same snapshot in Android Lite and Windows, and decode their shared
 golden vector locally. Confirm that only regular HTTP(S) tab URLs and the
@@ -173,6 +197,8 @@ closed testing.
 - Private data never enters Sync; the credential vault auto-locks on background
   and after five minutes; database/log/crash inspection finds no secrets.
 - All required device/WebView scenarios pass.
+- Private mode passes profile isolation, close/restart cleanup and unsupported-
+  provider fail-closed tests without persisting a URL to Room or Sync.
 - Portable backup unit vectors and Android/Lite/Windows provider round-trips pass.
 - A signed Play-generated install works from a clean profile.
 - Store metadata uses Xanh Browser consistently and does not promise a legacy

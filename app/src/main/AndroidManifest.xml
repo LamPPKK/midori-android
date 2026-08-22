@@ -73,6 +73,11 @@
         </activity>
         <activity android:name=".ActivityTabs" android:exported="false" android:parentActivityName=".BrowserActivity" />
         <activity
+            android:name=".PrivateBrowserActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="@string/private_browser" />
+        <activity
             android:name=".BrowserActivity"
             android:exported="true"
             android:launchMode="singleTop">

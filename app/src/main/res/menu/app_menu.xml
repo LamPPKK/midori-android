@@ -2,6 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
     <item android:id="@+id/action_tabs" android:icon="@drawable/ic_add_to_photos_black_24dp" android:title="@string/tabs" app:showAsAction="ifRoom" />
     <item android:id="@+id/action_new_tab" android:title="@string/new_tab" app:showAsAction="never" />
+    <item android:id="@+id/action_new_private_tab" android:title="@string/new_private_tab" app:showAsAction="never" />
     <item android:id="@+id/action_back" android:title="@string/back" app:showAsAction="never" />
     <item android:id="@+id/action_forward" android:title="@string/forward" app:showAsAction="never" />
     <item android:id="@+id/action_reload" android:icon="@drawable/ic_refresh_24dp" android:title="@string/reload" app:showAsAction="ifRoom" />

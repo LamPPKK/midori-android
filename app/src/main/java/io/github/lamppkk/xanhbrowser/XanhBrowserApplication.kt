@@ -9,6 +9,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 class XanhBrowserApplication : Application(), DefaultLifecycleObserver {
     override fun onCreate() {
         super<Application>.onCreate()
+        PrivateProfileManager.deleteStaleProfiles()
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 

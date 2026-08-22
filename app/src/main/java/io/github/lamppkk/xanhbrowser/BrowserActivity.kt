@@ -41,6 +41,7 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import io.github.lamppkk.xanhbrowser.backup.PortableBackup
 import io.github.lamppkk.xanhbrowser.backup.PortableBackupPayload
 import io.github.lamppkk.xanhbrowser.databinding.ActivityBrowserBinding
@@ -62,10 +63,15 @@ class BrowserActivity : AppCompatActivity() {
     private val mobileUserAgents = mutableMapOf<Long, String>()
     private val desktopModes = mutableMapOf<Long, Boolean>()
     private val credentialBridges = mutableMapOf<Long, XanhCredentialBridge>()
+    private val credentialDialogs = mutableMapOf<Long, AlertDialog>()
+    private val rendererRecoveryUsed = mutableSetOf<Long>()
+    private val rendererRecoveryPending = mutableSetOf<Long>()
+    private val rendererRecoveryRunning = mutableSetOf<Long>()
     private var activeTabId: Long = 0
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var geolocationRequest: Pair<String, GeolocationPermissions.Callback>? = null
     private var geolocationDialog: AlertDialog? = null
+    private var locationPermissionInFlight = false
     private var initialized = false
     private var downloadReceiverRegistered = false
     private var pendingBackupPassword: CharArray? = null
@@ -103,7 +109,12 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) confirmGeolocation() else completeGeolocation(false)
+        locationPermissionInFlight = false
+        if (granted && activeWebView() != null && geolocationRequest != null) {
+            confirmGeolocation()
+        } else {
+            completeGeolocation(false)
+        }
     }
 
     private val libraryResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -141,7 +152,10 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (initialized) synchronizeTabs()
+        if (initialized) {
+            if (activeTabId in rendererRecoveryPending) scheduleRendererRecovery(activeTabId)
+            else synchronizeTabs()
+        }
         lifecycleScope.launch { repository.allDownloads().forEach { updateDownloadStatus(it.id) } }
         activeWebView()?.onResume()
     }
@@ -188,14 +202,18 @@ class BrowserActivity : AppCompatActivity() {
         completeGeolocation(false)
         credentialBridges.values.forEach(XanhCredentialBridge::destroy)
         credentialBridges.clear()
+        credentialDialogs.values.forEach(AlertDialog::dismiss)
+        credentialDialogs.clear()
         sessions.values.forEach { webView ->
             binding.webContainer.removeView(webView)
             webView.stopLoading()
             webView.webChromeClient = null
-            webView.webViewClient = android.webkit.WebViewClient()
             webView.destroy()
         }
         sessions.clear()
+        rendererRecoveryUsed.clear()
+        rendererRecoveryPending.clear()
+        rendererRecoveryRunning.clear()
         super.onDestroy()
     }
 
@@ -244,7 +262,18 @@ class BrowserActivity : AppCompatActivity() {
     private fun loadInput(input: String) {
         val resolved = AddressResolver.resolve(input)
         val uri = resolved.toUri()
-        if (AddressResolver.isExternal(resolved)) openExternal(uri) else activeWebView()?.loadUrl(resolved)
+        if (AddressResolver.isExternal(resolved)) {
+            openExternal(uri)
+            return
+        }
+        if (!AddressResolver.isValidWebUrl(resolved)) return
+        rendererRecoveryUsed.remove(activeTabId)
+        val current = activeWebView() ?: createWebView(activeTabId).also {
+            sessions[activeTabId] = it
+            binding.webContainer.addView(it)
+            it.visibility = View.VISIBLE
+        }
+        current.loadUrl(resolved)
     }
 
     private fun synchronizeTabs() {
@@ -259,24 +288,30 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun destroySession(tabId: Long, clearData: Boolean = false) {
-        val webView = sessions.remove(tabId) ?: return
-        binding.webContainer.removeView(webView)
-        webView.stopLoading()
-        if (clearData) {
-            webView.clearCache(true)
-            webView.clearHistory()
-            webView.clearFormData()
-            webView.clearSslPreferences()
-        }
-        webView.webChromeClient = null
-        webView.webViewClient = android.webkit.WebViewClient()
+        credentialDialogs.remove(tabId)?.dismiss()
         credentialBridges.remove(tabId)?.destroy()
-        webView.destroy()
+        sessions.remove(tabId)?.let { webView ->
+            binding.webContainer.removeView(webView)
+            webView.stopLoading()
+            if (clearData) {
+                webView.clearCache(true)
+                webView.clearHistory()
+                webView.clearFormData()
+                webView.clearSslPreferences()
+            }
+            webView.webChromeClient = null
+            webView.destroy()
+        }
         mobileUserAgents.remove(tabId)
         desktopModes.remove(tabId)
+        rendererRecoveryUsed.remove(tabId)
+        rendererRecoveryPending.remove(tabId)
+        rendererRecoveryRunning.remove(tabId)
     }
 
     private fun showTab(tab: BrowserTab) {
+        rendererRecoveryPending.remove(tab.id)
+        if (activeTabId != tab.id) credentialDialogs.remove(activeTabId)?.dismiss()
         sessions[activeTabId]?.apply {
             visibility = View.GONE
             onPause()
@@ -289,9 +324,10 @@ class BrowserActivity : AppCompatActivity() {
         activeTabId = tab.id
         webView.visibility = View.VISIBLE
         webView.onResume()
-        binding.urlBar.setText(tab.url)
+        val safeUrl = tab.url.takeIf(AddressResolver::isValidWebUrl) ?: getString(R.string.app_website)
+        binding.urlBar.setText(safeUrl)
         supportActionBar?.subtitle = tab.title
-        if (existing == null) webView.loadUrl(tab.url)
+        if (existing == null) webView.loadUrl(safeUrl)
         lifecycleScope.launch { repository.selectTab(tab.id) }
         invalidateOptionsMenu()
     }
@@ -320,7 +356,7 @@ class BrowserActivity : AppCompatActivity() {
             it.install()
         }
         webViewClient = XanhWebViewClient(this@BrowserActivity, tabId)
-        webChromeClient = XanhWebChromeClient(this@BrowserActivity, tabId)
+        webChromeClient = XanhWebChromeClient(this@BrowserActivity, tabId, this)
         setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             enqueueDownload(url, userAgent, contentDisposition, mimeType)
         }
@@ -328,8 +364,10 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun activeWebView(): WebView? = sessions[activeTabId]
 
+    internal fun isCurrentSession(tabId: Long, view: WebView): Boolean = sessions[tabId] === view
+
     internal fun onPageChanged(tabId: Long, url: String?, title: String?) {
-        if (url.isNullOrBlank() || url == "about:blank") return
+        if (url.isNullOrBlank() || url == "about:blank" || !AddressResolver.isValidWebUrl(url)) return
         lifecycleScope.launch { repository.updatePage(tabId, url, title.orEmpty()) }
         if (tabId == activeTabId) {
             binding.urlBar.setText(url)
@@ -338,6 +376,7 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     internal fun onNavigationStarted(tabId: Long, url: String?) {
+        credentialDialogs.remove(tabId)?.dismiss()
         credentialBridges[tabId]?.navigationStarted(url)
     }
 
@@ -345,9 +384,22 @@ class BrowserActivity : AppCompatActivity() {
         credentialBridges[tabId]?.navigationCommitted(url)
     }
 
-    internal fun showCredentialSuggestions(tabId: Long, origin: String, reply: (String) -> Unit) {
-        if (tabId != activeTabId) return
+    internal fun showCredentialSuggestions(
+        bridge: XanhCredentialBridge,
+        tabId: Long,
+        origin: String,
+        requestNonce: String,
+        reply: (String) -> Boolean,
+    ) {
+        if (
+            tabId != activeTabId ||
+            credentialBridges[tabId] !== bridge ||
+            !bridge.isRequestCurrent(requestNonce)
+        ) return
         lifecycleScope.launch {
+            if (credentialBridges[tabId] !== bridge || !bridge.isRequestCurrent(requestNonce)) {
+                return@launch
+            }
             val runtime = SyncCoordinator.get(this@BrowserActivity).runtimeOrNull() ?: return@launch
             if (!runCatching { runtime.touchVault() }.getOrDefault(false)) return@launch
             val requestedOrigin = CredentialPolicy.canonicalHttpsOrigin(
@@ -365,28 +417,49 @@ class BrowserActivity : AppCompatActivity() {
             val logins = withContext(Dispatchers.IO) {
                 runCatching { runtime.credentialLogins(context) }
             }.getOrElse { return@launch }
-            if (logins.isEmpty()) return@launch
-            AlertDialog.Builder(this@BrowserActivity)
+            if (
+                logins.isEmpty() ||
+                tabId != activeTabId ||
+                credentialBridges[tabId] !== bridge ||
+                !bridge.isRequestCurrent(requestNonce) ||
+                !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            ) return@launch
+            val dialog = AlertDialog.Builder(this@BrowserActivity)
                 .setTitle(R.string.sync_choose_credential)
                 .setItems(logins.map { it.username.ifBlank { getString(R.string.sync_empty_username) } }.toTypedArray()) {
                     _, index ->
                     val selected = logins[index]
                     val allowed = runCatching { runtime.touchVault() }.getOrDefault(false) &&
                         CredentialPolicy.isAllowed(context, vaultUnlocked = true)
-                    if (!allowed || sessions[tabId]?.url != documentUrl) return@setItems
-                    reply(
+                    if (
+                        !allowed ||
+                        tabId != activeTabId ||
+                        sessions[tabId]?.url != documentUrl ||
+                        credentialBridges[tabId] !== bridge ||
+                        !bridge.isRequestCurrent(requestNonce)
+                    ) return@setItems
+                    val delivered = reply(
                         JSONObject()
                             .put("type", "credential-selected")
                             .put("username", selected.username)
                             .put("password", selected.password)
                             .toString(),
                     )
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        runCatching { runtime.touchLogin(selected.id) }
+                    if (delivered) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            runCatching { runtime.touchLogin(selected.id) }
+                        }
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .create()
+            dialog.setOnDismissListener { credentialDialogs.remove(tabId, dialog) }
+            credentialDialogs.put(tabId, dialog)?.dismiss()
+            if (
+                tabId == activeTabId &&
+                credentialBridges[tabId] === bridge &&
+                bridge.isRequestCurrent(requestNonce)
+            ) dialog.show()
         }
     }
 
@@ -396,25 +469,70 @@ class BrowserActivity : AppCompatActivity() {
         binding.loadingProgress.visibility = if (progress in 0..99) View.VISIBLE else View.GONE
     }
 
-    internal fun onRendererGone(tabId: Long) {
-        val failed = sessions.remove(tabId) ?: return
+    internal fun onRendererGone(tabId: Long, failed: WebView): Boolean {
+        if (sessions[tabId] !== failed) return true
+        sessions.remove(tabId)
         binding.webContainer.removeView(failed)
-        credentialBridges.remove(tabId)?.destroy()
+        credentialBridges.remove(tabId)?.abandonRenderer()
+        credentialDialogs.remove(tabId)?.dismiss()
+        if (tabId == activeTabId) {
+            fileCallback?.onReceiveValue(null)
+            fileCallback = null
+            cancelGeolocation()
+        }
         failed.destroy()
         mobileUserAgents.remove(tabId)
         desktopModes.remove(tabId)
-        lifecycleScope.launch { repository.selected()?.takeIf { it.id == tabId }?.let(::showTab) }
+        if (tabId == activeTabId) {
+            rendererRecoveryPending.add(tabId)
+            scheduleRendererRecovery(tabId)
+        }
+        return true
+    }
+
+    private fun scheduleRendererRecovery(tabId: Long) {
+        if (
+            tabId !in rendererRecoveryPending ||
+            tabId != activeTabId ||
+            !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ||
+            !rendererRecoveryRunning.add(tabId)
+        ) return
+        if (tabId in rendererRecoveryUsed) {
+            rendererRecoveryPending.remove(tabId)
+            rendererRecoveryRunning.remove(tabId)
+            binding.loadingProgress.visibility = View.GONE
+            Toast.makeText(this, R.string.renderer_recovery_stopped, Toast.LENGTH_LONG).show()
+            return
+        }
+        rendererRecoveryUsed.add(tabId)
+        lifecycleScope.launch {
+            try {
+                val tab = repository.allTabs().firstOrNull { it.id == tabId } ?: return@launch
+                if (
+                    tabId in rendererRecoveryPending &&
+                    tabId == activeTabId &&
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                ) {
+                    rendererRecoveryPending.remove(tabId)
+                    val safeUrl = tab.url.takeIf(AddressResolver::isValidWebUrl)
+                        ?: getString(R.string.app_website)
+                    showTab(tab.copy(url = safeUrl))
+                }
+            } finally {
+                rendererRecoveryRunning.remove(tabId)
+            }
+        }
     }
 
     internal fun openExternal(uri: Uri): Boolean {
         val external = Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
-        return if (external.resolveActivity(packageManager) != null) {
-            startActivity(external)
-            true
-        } else {
+        if (external.resolveActivity(packageManager) == null) {
             Toast.makeText(this, R.string.no_app_for_link, Toast.LENGTH_SHORT).show()
-            false
+            return false
         }
+        return runCatching { startActivity(external) }
+            .onFailure { Toast.makeText(this, R.string.no_app_for_link, Toast.LENGTH_SHORT).show() }
+            .isSuccess
     }
 
     internal fun chooseFiles(callback: ValueCallback<Array<Uri>>, acceptTypes: Array<String>): Boolean {
@@ -431,6 +549,10 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     internal fun requestGeolocation(origin: String, callback: GeolocationPermissions.Callback) {
+        if (activeWebView() == null) {
+            callback.invoke(origin, false, false)
+            return
+        }
         geolocationDialog?.setOnCancelListener(null)
         geolocationDialog?.dismiss()
         geolocationDialog = null
@@ -440,6 +562,11 @@ class BrowserActivity : AppCompatActivity() {
             confirmGeolocation()
             return
         }
+        if (locationPermissionInFlight) {
+            completeGeolocation(false)
+            return
+        }
+        locationPermissionInFlight = true
         locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
@@ -657,6 +784,9 @@ class BrowserActivity : AppCompatActivity() {
     private fun clearPrivateData() {
         lifecycleScope.launch {
             sessions.keys.toList().forEach { destroySession(it, clearData = true) }
+            rendererRecoveryUsed.clear()
+            rendererRecoveryPending.clear()
+            rendererRecoveryRunning.clear()
             activeTabId = 0
             WebStorage.getInstance().deleteAllData()
             clearLegacyWebViewCredentials()
@@ -707,6 +837,14 @@ class BrowserActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_tabs -> { startActivity(Intent(this, ActivityTabs::class.java)); true }
         R.id.action_new_tab -> { createTab(getString(R.string.app_website)); true }
+        R.id.action_new_private_tab -> {
+            if (PrivateProfileManager.isSupported()) {
+                startActivity(Intent(this, PrivateBrowserActivity::class.java))
+            } else {
+                Toast.makeText(this, R.string.private_mode_unavailable, Toast.LENGTH_LONG).show()
+            }
+            true
+        }
         R.id.action_back -> { activeWebView()?.goBack(); true }
         R.id.action_forward -> { activeWebView()?.goForward(); true }
         R.id.action_reload -> { activeWebView()?.reload(); true }

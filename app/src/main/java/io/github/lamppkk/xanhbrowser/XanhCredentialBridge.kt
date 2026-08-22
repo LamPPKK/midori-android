@@ -29,9 +29,10 @@ internal class XanhCredentialBridge(
     private var navigationNonce = UUID.randomUUID().toString()
     private var scriptHandler: ScriptHandler? = null
     private var installed = false
+    private var abandoned = false
 
     fun install() {
-        if (installed || !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
+        if (abandoned || installed || !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
         WebViewCompat.addWebMessageListener(
             webView,
             BRIDGE_NAME,
@@ -46,6 +47,7 @@ internal class XanhCredentialBridge(
     }
 
     fun navigationStarted(url: String?) {
+        if (abandoned) return
         committedUrl = canonicalHttpsUrl(url)
         navigationNonce = UUID.randomUUID().toString()
         if (!installed || committedUrl == null ||
@@ -63,10 +65,12 @@ internal class XanhCredentialBridge(
     }
 
     fun navigationCommitted(url: String?) {
+        if (abandoned) return
         committedUrl = canonicalHttpsUrl(url)
     }
 
     fun destroy() {
+        if (abandoned) return
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             scriptHandler?.remove()
         }
@@ -78,6 +82,15 @@ internal class XanhCredentialBridge(
         committedUrl = null
     }
 
+    // Invalidates host state without invoking any API on a terminated renderer.
+    fun abandonRenderer() {
+        abandoned = true
+        installed = false
+        scriptHandler = null
+        committedUrl = null
+        navigationNonce = UUID.randomUUID().toString()
+    }
+
     private fun onMessage(
         view: WebView,
         message: WebMessageCompat,
@@ -85,6 +98,7 @@ internal class XanhCredentialBridge(
         isMainFrame: Boolean,
         reply: JavaScriptReplyProxy,
     ) {
+        if (abandoned) return
         if (!isMainFrame || message.type != WebMessageCompat.TYPE_STRING) return
         val currentUrl = committedUrl ?: return
         val data = message.data ?: return
@@ -105,14 +119,23 @@ internal class XanhCredentialBridge(
             )
         ) return
         val requestUrl = view.url ?: return
-        activity.showCredentialSuggestions(tabId, sourceOrigin.toString()) { response ->
-            if (navigationNonce == envelope.navigationNonce && webView.url == requestUrl &&
+        activity.showCredentialSuggestions(
+            this,
+            tabId,
+            sourceOrigin.toString(),
+            envelope.navigationNonce,
+        ) { response ->
+            if (!abandoned && navigationNonce == envelope.navigationNonce && webView.url == requestUrl &&
                 WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
             ) {
-                reply.postMessage(response)
+                return@showCredentialSuggestions runCatching { reply.postMessage(response) }.isSuccess
             }
+            false
         }
     }
+
+    internal fun isRequestCurrent(expectedNonce: String): Boolean =
+        !abandoned && navigationNonce == expectedNonce
 
     private fun bootstrapScript(tabId: Long, nonce: String): String = """
         (() => {

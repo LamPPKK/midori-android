@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_back" android:title="@string/back" app:showAsAction="never" />
+    <item android:id="@+id/action_forward" android:title="@string/forward" app:showAsAction="never" />
+    <item android:id="@+id/action_reload" android:icon="@drawable/ic_refresh_24dp" android:title="@string/reload" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_share" android:icon="@drawable/ic_share_24dp" android:title="@string/share" app:showAsAction="never" />
+    <item android:id="@+id/action_desktop_site" android:checkable="true" android:title="@string/desktop_site" app:showAsAction="never" />
+    <item android:id="@+id/action_close_private" android:title="@string/close_private_tab" app:showAsAction="never" />
+</menu>

@@ -31,6 +31,9 @@
   personalization and uses the same UA as regular mode.
 - Bound private renderer recovery to one foreground attempt and cancel stale
   file/geolocation callbacks before destroying the failed WebView.
+- Added API 29+ device instrumentation that terminates the real regular-tab
+  renderer, verifies an exact replacement, and proves that a repeated crash
+  reaches the stable stopped state instead of an automatic reload loop.
 
 ### Changed
 

@@ -2,6 +2,8 @@ package io.github.lamppkk.xanhbrowser
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.SystemClock
 import androidx.core.net.toUri
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -25,6 +27,24 @@ class BrowserActivityTest {
     @Test fun launchesBrowserActivity() {
         ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> check(!activity.isFinishing) }
+        }
+    }
+
+    @Test fun rendererRecoveryIsForegroundAndOneShot() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val target = "https://example.com/renderer-recovery"
+        val intent = Intent(context, BrowserActivity::class.java).setData(target.toUri())
+
+        ActivityScenario.launch<BrowserActivity>(intent).use { scenario ->
+            val firstIdentity = awaitWebViewIdentity(scenario)
+            terminateRendererEventually(scenario)
+            val recoveredIdentity = awaitWebViewIdentity(scenario, differentFrom = firstIdentity)
+            assertNotEquals(firstIdentity, recoveredIdentity)
+            assertEquals(target, awaitCurrentUrl(scenario, target))
+
+            terminateRendererEventually(scenario)
+            awaitNoActiveWebView(scenario)
         }
     }
 
@@ -97,6 +117,54 @@ class BrowserActivityTest {
         withTimeout(5_000) {
             while (database.tabs().getAll().size != count) delay(25)
         }
+    }
+
+    private fun awaitWebViewIdentity(
+        scenario: ActivityScenario<BrowserActivity>,
+        differentFrom: Int? = null,
+    ): Int {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var identity: Int? = null
+        while (SystemClock.elapsedRealtime() < deadline) {
+            scenario.onActivity { identity = it.currentWebViewIdentityForTest() }
+            if (identity != null && identity != differentFrom) return requireNotNull(identity)
+            SystemClock.sleep(50)
+        }
+        return requireNotNull(identity) { "A replacement WebView was not created" }
+    }
+
+    private fun awaitCurrentUrl(
+        scenario: ActivityScenario<BrowserActivity>,
+        expected: String,
+    ): String? {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var actual: String? = null
+        while (SystemClock.elapsedRealtime() < deadline) {
+            scenario.onActivity { actual = it.currentWebUrlForTest() }
+            if (actual == expected) return actual
+            SystemClock.sleep(50)
+        }
+        return actual
+    }
+
+    private fun terminateRendererEventually(scenario: ActivityScenario<BrowserActivity>) {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var terminated = false
+        while (!terminated && SystemClock.elapsedRealtime() < deadline) {
+            scenario.onActivity { terminated = it.terminateCurrentRendererForTest() }
+            if (!terminated) SystemClock.sleep(50)
+        }
+        assertTrue("WebView renderer never became available", terminated)
+    }
+
+    private fun awaitNoActiveWebView(scenario: ActivityScenario<BrowserActivity>) {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var identity: Int? = 0
+        while (identity != null && SystemClock.elapsedRealtime() < deadline) {
+            scenario.onActivity { identity = it.currentWebViewIdentityForTest() }
+            if (identity != null) SystemClock.sleep(50)
+        }
+        assertEquals(null, identity)
     }
 
     private fun privateProfileNames(): List<String> {

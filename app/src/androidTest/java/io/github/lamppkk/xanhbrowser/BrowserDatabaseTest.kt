@@ -69,7 +69,13 @@ class BrowserDatabaseTest {
     }
 
     @Test fun historyPreservesExactVisitIdentities() = runBlocking {
-        database.history().record(HistoryEntry(url = "https://example.com", title = "First"))
+        database.history().record(
+            HistoryEntry(
+                url = "https://example.com",
+                title = "First",
+                visitedAt = 1,
+            ),
+        )
         database.history().record(
             HistoryEntry(
                 url = "https://example.com",

@@ -115,6 +115,10 @@ For a regular tab, force renderer termination in foreground and background;
 confirm exact-view teardown, stale credential/file/location cancellation, no
 background reload, one automatic recovery at most, and a stable stopped state
 after a repeated crash.
+`BrowserActivityTest.rendererRecoveryIsForegroundAndOneShot` automates the
+foreground kill/replacement/repeated-crash path with the real WebView renderer
+on API 29 and newer; the background and multi-provider cases remain mandatory
+manual matrix checks.
 Open private browsing with a provider that supports `MULTI_PROFILE`, verify its
 cookies/storage are invisible to regular tabs, rotate the Activity, close it,
 and confirm the random profile is deleted. Kill the process mid-session and

@@ -36,6 +36,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -363,6 +364,19 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun activeWebView(): WebView? = sessions[activeTabId]
+
+    @VisibleForTesting
+    internal fun currentWebViewIdentityForTest(): Int? =
+        activeWebView()?.let(System::identityHashCode)
+
+    @VisibleForTesting
+    internal fun currentWebUrlForTest(): String? = activeWebView()?.url
+
+    @VisibleForTesting
+    internal fun terminateCurrentRendererForTest(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return activeWebView()?.webViewRenderProcess?.terminate() == true
+    }
 
     internal fun isCurrentSession(tabId: Long, view: WebView): Boolean = sessions[tabId] === view
 

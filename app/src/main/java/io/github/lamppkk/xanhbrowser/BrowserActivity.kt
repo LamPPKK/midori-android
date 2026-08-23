@@ -447,7 +447,10 @@ class BrowserActivity : AppCompatActivity() {
                     )
                     if (delivered) {
                         lifecycleScope.launch(Dispatchers.IO) {
-                            runCatching { runtime.touchLogin(selected.id) }
+                            runCatching {
+                                runtime.touchLogin(selected.id)
+                                SyncCoordinator.get(this@BrowserActivity).recordLocalChange()
+                            }
                         }
                     }
                 }

@@ -154,6 +154,21 @@ rename/delete while Places is unavailable, restart at the marker/Room boundary,
 and confirm the next Sync imports the pending result without restoring the old
 row. A malformed or stale GUID must fail closed without deleting by URL.
 
+For the Xanh-only password library, unlock with device authentication and test
+list/add/update/confirm-delete plus a successful credential fill/touch. Each
+successful mutation must schedule local-change Sync. Reject HTTP, userinfo,
+path/query/fragment-bearing origins, invalid ports/STD3 hostnames, HTTP-auth or
+cross-origin form records, non-ASCII/overlong IDs, embedded NUL/control values,
+usernames over 1,024 UTF-8 bytes, passwords over 4,096 UTF-8 bytes and field
+names over 256 UTF-8 bytes without dismissing or retargeting the editor. Move
+the app to background, lock the vault, disconnect and replace the runtime while
+queries/mutations are pending; decrypted rows and dialogs must disappear and a
+stale completion must not repopulate UI. Confirm the secure window blocks
+screenshots and the hierarchy opts out of Autofill/content capture and requests
+no IME personalized learning, while treating external provider/IME compliance
+as platform-controlled. This library must not register Xanh as an OS-wide
+Autofill service.
+
 ## 4. Build the signed production candidate
 
 Before packaging Sync, complete the Firefox↔Xanh interoperability suite and

@@ -69,6 +69,10 @@
 - Restricted credential suggestions to bounded exact-origin form records,
   rejected malformed metadata, and required a recent pointer or keyboard
   trusted gesture before a page can request the native chooser.
+- Applied the same exact HTTPS-origin, ASCII identifier and UTF-8 byte bounds to
+  password-library list/add/update/delete/touch operations, scheduled successful
+  mutations for Sync, and cleared stale decrypted UI on backgrounding or vault
+  replacement.
 - Isolated private cookies, cache, service workers and storage from the regular
   WebView profile and delete orphaned private profiles on process startup.
 

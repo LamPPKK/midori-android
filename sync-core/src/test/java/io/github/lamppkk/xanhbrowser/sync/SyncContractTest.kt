@@ -11,6 +11,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import mozilla.appservices.logins.DatabaseLoginsStorage
 import mozilla.appservices.logins.Login
+import mozilla.appservices.logins.LoginEntry
 import mozilla.appservices.places.PlacesApi
 
 class SyncContractTest {
@@ -239,7 +240,66 @@ class SyncContractTest {
         assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(id = "tài-khoản"), origin))
         assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(password = ""), origin))
         assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(password = "x".repeat(4_097)), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(username = "name\u0000tail"), origin))
+        assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(password = "secret\u0000tail"), origin))
         assertFalse(CredentialPolicy.isEligibleCredential(valid.copy(timesUsed = -1), origin))
+    }
+
+    @Test
+    fun `credential mutations share exact origin id and utf8 byte bounds`() {
+        val valid = LoginEntry(
+            origin = "https://xn--bcher-kva.example",
+            httpRealm = null,
+            formActionOrigin = "https://xn--bcher-kva.example",
+            usernameField = "username",
+            passwordField = "password",
+            password = "secret",
+            username = "person@example.org",
+        )
+        assertTrue(CredentialPolicy.isAllowedMutation(valid))
+        assertEquals(
+            "https://xn--bcher-kva.example",
+            CredentialPolicy.canonicalHttpsOrigin("https://bücher.example", requireOriginOnly = true),
+        )
+        assertEquals(
+            "https://xn--bcher-kva.example",
+            CredentialPolicy.canonicalMutation(
+                valid.copy(
+                    origin = "https://bücher.example",
+                    formActionOrigin = "https://bücher.example:443",
+                ),
+            )?.origin,
+        )
+        assertEquals(
+            "https://[2001:db8::1]",
+            CredentialPolicy.canonicalHttpsOrigin(
+                "https://[2001:db8::1]:443",
+                requireOriginOnly = true,
+            ),
+        )
+        assertTrue(CredentialPolicy.isValidCredentialId("AbCdEf123_-"))
+        assertFalse(CredentialPolicy.isValidCredentialId("tài-khoản"))
+        assertFalse(CredentialPolicy.isValidCredentialId("x".repeat(129)))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(origin = "https://bücher.example/login")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(origin = "https://example.org:70000")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(origin = "https://foo_bar.example")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(httpRealm = "restricted")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(formActionOrigin = "https://evil.example")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(username = "😀".repeat(257))))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(password = "x".repeat(4_097))))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(password = "secret\u0000tail")))
+        assertFalse(CredentialPolicy.isAllowedMutation(valid.copy(usernameField = "user\nname")))
+
+        val stored = login(
+            origin = "https://bücher.example",
+            formActionOrigin = "https://bücher.example:443",
+        )
+        assertTrue(CredentialPolicy.isSafeManagerCredential(stored))
+        assertEquals(
+            "https://xn--bcher-kva.example",
+            CredentialPolicy.sanitizedCredential(stored)?.origin,
+        )
+        assertFalse(CredentialPolicy.isSafeManagerCredential(stored.copy(origin = "https://example.org/path")))
     }
 
     private fun login(

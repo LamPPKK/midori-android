@@ -104,9 +104,9 @@ logs.
 ## Implementation snapshot (2026-08-23)
 
 The Android implementation builds against the checksum-verified Application
-Services 155.0 AARs. Local verification currently passes 25 JVM tests across
-the backup, Sync and browser modules; Android lint completes without errors;
-and the app plus Sync instrumentation APKs compile. The production bundle task
+Services 155.0 AARs. Local verification runs JVM tests across the backup, Sync
+and browser modules; Android lint completes without errors; and the app plus
+Sync instrumentation APKs compile. The production bundle task
 remains guarded by explicit Sync mode, Mozilla approval and signing inputs.
 
 The verified implementation includes OAuth Custom Tabs, encrypted account
@@ -118,12 +118,21 @@ The schema-v2 mirror carries exact Places mutation identities, exposes native
 bookmark rename, and keeps offline rows pending under a crash-safe write-ahead
 migration intent.
 Credential results are bounded and filtered inside the Sync runtime before the
-native chooser receives them. “Delete from this device” removes local engine
-databases even when account restoration fails.
+native chooser receives them. The Xanh-only password library shares the same
+exact HTTPS-origin, ASCII identifier, metadata and UTF-8 byte limits for
+list/add/update/delete/touch. Successful mutations refresh vault activity and
+schedule a local-change Sync; invalid records never enter native UI. The
+password Activity uses secure-window rendering, opts its hierarchy out of
+Autofill/content capture, requests no IME personalized learning and clears
+decrypted rows/dialogs whenever it leaves the foreground. External provider/IME
+compliance remains platform-controlled. “Delete from this device” removes local
+engine databases even when account restoration fails.
 Runtime use and close are serialized, native Places/Logins handles never
 escape the wrapper, failed engine registration retains the process lease
 fail-closed, and a retained password screen exits safely if another flow
-disconnects or replaces its runtime.
+disconnects or replaces its runtime. Async password mutations finish in the
+runtime even if the Activity stops, but stale generations cannot repopulate or
+retarget the hidden UI.
 
 The following evidence is deliberately not claimed by the repository yet:
 

@@ -86,5 +86,6 @@
     <string name="sync_password_origin">HTTPS website origin</string>
     <string name="sync_password_username">Username</string>
     <string name="sync_password_value">Password</string>
-    <string name="sync_password_invalid">Enter a valid HTTPS origin without user info and a non-empty password</string>
+    <string name="sync_password_invalid">Use an exact HTTPS origin without a path or user info, and keep the username, password, and field values within the shared Sync limits</string>
+    <string name="sync_password_operation_failed">The password operation failed safely; no credential was retargeted</string>
 </resources>

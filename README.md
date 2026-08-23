@@ -158,9 +158,14 @@ the device matrix and security review remain required. Account tokens, scoped
 keys and passwords are never part of `.xanhbackup`. Because Application
 Services engine registration is process-wide, Android also enforces one live
 Sync runtime per process to prevent cross-profile engine resolution. Password
-suggestions require a recent trusted user gesture and an unlocked vault; the runtime
-returns only bounded form credentials matching the exact canonical HTTPS
-origin.
+suggestions require a recent trusted user gesture and an unlocked vault; the
+runtime returns only bounded form credentials matching the exact canonical
+HTTPS origin. The Xanh-only password library applies the same origin,
+identifier and UTF-8 byte limits to list/add/update/delete/touch operations,
+marks successful local mutations for Sync, and drops decrypted rows/dialogs
+whenever its Activity leaves the foreground. Its hierarchy opts out of Android
+Autofill and content capture and requests no IME personalized learning;
+provider/IME compliance remains platform-controlled.
 
 The Room compatibility mirror does not infer Sync identity from URL. Native
 bookmarks retain their 12-character Places GUID, duplicate URLs remain separate,

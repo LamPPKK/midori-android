@@ -1,7 +1,9 @@
 package io.github.lamppkk.xanhbrowser.sync
 
+import java.net.IDN
 import java.net.URI
 import mozilla.appservices.logins.Login
+import mozilla.appservices.logins.LoginEntry
 
 data class CredentialContext(
     val documentUrl: String,
@@ -30,24 +32,68 @@ object CredentialPolicy {
             login.formActionOrigin?.let {
                 canonicalHttpsOrigin(it, requireOriginOnly = true)
             } == expectedOrigin &&
-            login.id.toByteArray(Charsets.UTF_8).size in 1..MAX_CREDENTIAL_ID_BYTES &&
-            login.id.all {
-                it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_'
-            } &&
-            login.username.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_USERNAME_BYTES &&
-            login.password.isNotEmpty() &&
-            login.password.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_PASSWORD_BYTES &&
-            login.usernameField.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_FIELD_BYTES &&
-            login.passwordField.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_FIELD_BYTES &&
-            login.usernameField.none(Char::isISOControl) &&
-            login.passwordField.none(Char::isISOControl) &&
+            isValidCredentialId(login.id) &&
+            isValidUsername(login.username) &&
+            isValidPassword(login.password) &&
+            isValidField(login.usernameField) &&
+            isValidField(login.passwordField) &&
             login.timesUsed >= 0 &&
             login.timeCreated >= 0 &&
             login.timeLastUsed >= 0 &&
             login.timePasswordChanged >= 0
 
+    fun isSafeManagerCredential(login: Login): Boolean {
+        return sanitizedCredential(login) != null
+    }
+
+    fun isAllowedMutation(entry: LoginEntry): Boolean = canonicalMutation(entry) != null
+
+    internal fun canonicalMutation(entry: LoginEntry): LoginEntry? {
+        val origin = canonicalHttpsOrigin(entry.origin, requireOriginOnly = true) ?: return null
+        if (entry.httpRealm != null ||
+            entry.formActionOrigin?.let {
+                canonicalHttpsOrigin(it, requireOriginOnly = true)
+            } != origin ||
+            !isValidUsername(entry.username) ||
+            !isValidPassword(entry.password) ||
+            !isValidField(entry.usernameField) ||
+            !isValidField(entry.passwordField)
+        ) return null
+        return entry.copy(origin = origin, formActionOrigin = origin)
+    }
+
+    internal fun sanitizedCredential(login: Login, expectedOrigin: String? = null): Login? {
+        val origin = canonicalHttpsOrigin(login.origin, requireOriginOnly = true) ?: return null
+        if (expectedOrigin != null && origin != expectedOrigin) return null
+        if (!isEligibleCredential(login, origin)) return null
+        return login.copy(origin = origin, formActionOrigin = origin)
+    }
+
+    fun isValidCredentialId(value: String?): Boolean = value != null &&
+        value.toByteArray(Charsets.UTF_8).size in 1..MAX_CREDENTIAL_ID_BYTES &&
+        value.all {
+            it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_'
+        }
+
+    private fun isValidUsername(value: String?): Boolean = value != null &&
+        value.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_USERNAME_BYTES &&
+        '\u0000' !in value
+
+    private fun isValidPassword(value: String?): Boolean = value != null &&
+        value.isNotEmpty() &&
+        value.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_PASSWORD_BYTES &&
+        '\u0000' !in value
+
+    private fun isValidField(value: String?): Boolean = value != null &&
+        value.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_FIELD_BYTES &&
+        value.none(Char::isISOControl)
+
     private fun parseHttps(value: String, originOnly: Boolean): URI? = value
-        .takeIf { it.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_ORIGIN_BYTES }
+        .takeIf {
+            it.toByteArray(Charsets.UTF_8).size <= MAX_CREDENTIAL_ORIGIN_BYTES &&
+                it.none(Char::isISOControl) && '\\' !in it
+        }
+        ?.let(::normalizeHttpsAuthority)
         ?.let { runCatching { URI(it) }.getOrNull() }
         ?.takeIf {
             it.isAbsolute && it.scheme.equals("https", true) && it.host != null &&
@@ -56,6 +102,33 @@ object CredentialPolicy {
                     ((it.rawPath.isNullOrEmpty() || it.rawPath == "/") &&
                         it.rawQuery == null && it.rawFragment == null))
         }
+
+    private fun normalizeHttpsAuthority(value: String): String? {
+        val schemeEnd = value.indexOf("://")
+        if (schemeEnd <= 0 || !value.substring(0, schemeEnd).equals("https", true)) return value
+        val authorityStart = schemeEnd + 3
+        val authorityEnd = value.indexOfAny(charArrayOf('/', '?', '#'), authorityStart)
+            .takeUnless { it < 0 } ?: value.length
+        val authority = value.substring(authorityStart, authorityEnd)
+        if (authority.isEmpty() || '@' in authority) return null
+        if (authority.startsWith('[')) return value
+        if (authority.count { it == ':' } > 1) return null
+        val separator = authority.lastIndexOf(':')
+        val host = if (separator >= 0) authority.substring(0, separator) else authority
+        val port = if (separator >= 0) authority.substring(separator) else ""
+        if (host.isEmpty() || separator >= 0 &&
+            (port.length == 1 || port.drop(1).any { !it.isDigit() })
+        ) return null
+        val asciiHost = runCatching {
+            IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES).lowercase()
+        }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        return buildString(value.length + asciiHost.length - host.length) {
+            append(value, 0, authorityStart)
+            append(asciiHost)
+            append(port)
+            append(value, authorityEnd, value.length)
+        }
+    }
 
     private fun canonicalOrigin(uri: URI): String =
         URI(
@@ -68,12 +141,12 @@ object CredentialPolicy {
             null,
         ).toASCIIString()
 
-    internal const val MAX_CREDENTIAL_RESULTS = 100
-    private const val MAX_CREDENTIAL_ORIGIN_BYTES = 8_192
-    private const val MAX_CREDENTIAL_ID_BYTES = 128
-    private const val MAX_CREDENTIAL_USERNAME_BYTES = 1_024
-    private const val MAX_CREDENTIAL_PASSWORD_BYTES = 4_096
-    private const val MAX_CREDENTIAL_FIELD_BYTES = 256
+    const val MAX_CREDENTIAL_RESULTS = 100
+    const val MAX_CREDENTIAL_ORIGIN_BYTES = 8_192
+    const val MAX_CREDENTIAL_ID_BYTES = 128
+    const val MAX_CREDENTIAL_USERNAME_BYTES = 1_024
+    const val MAX_CREDENTIAL_PASSWORD_BYTES = 4_096
+    const val MAX_CREDENTIAL_FIELD_BYTES = 256
 }
 
 data class BridgeEnvelope(

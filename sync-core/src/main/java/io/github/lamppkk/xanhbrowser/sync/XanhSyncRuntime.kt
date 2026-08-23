@@ -214,15 +214,20 @@ class XanhSyncRuntime(
     }
 
     fun listLogins(): List<Login> = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
-        logins?.list().orEmpty()
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
+        val store = checkNotNull(logins) { "Password vault is locked" }
+        store.list().mapNotNull(CredentialPolicy::sanitizedCredential).also {
+            vaultUnlockedAtEpochSeconds = now
+        }
     }
 
     /** Returns only bounded form credentials eligible for a native picker at
      * the exact validated HTTPS origin. This avoids decrypting every saved
      * password in the browser host before applying page policy. */
     fun credentialLogins(context: CredentialContext): List<Login> = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
         val store = checkNotNull(logins) { "Password vault is locked" }
         require(CredentialPolicy.isAllowed(context, vaultUnlocked = true)) {
             "Credential context is not allowed"
@@ -231,30 +236,52 @@ class XanhSyncRuntime(
         val host = checkNotNull(java.net.URI(origin).host)
         store.getByBaseDomain(host)
             .asSequence()
-            .filter { login -> CredentialPolicy.isEligibleCredential(login, origin) }
+            .mapNotNull { login -> CredentialPolicy.sanitizedCredential(login, origin) }
             .sortedWith(compareByDescending<Login> { it.timeLastUsed }.thenBy { it.id })
             .take(CredentialPolicy.MAX_CREDENTIAL_RESULTS)
             .toList()
+            .also { vaultUnlockedAtEpochSeconds = now }
     }
 
     fun addLogin(entry: LoginEntry) = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
-        checkNotNull(logins) { "Password vault is locked" }.add(entry)
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
+        val canonicalEntry = requireNotNull(CredentialPolicy.canonicalMutation(entry)) {
+            "Credential mutation is not allowed"
+        }
+        checkNotNull(logins) { "Password vault is locked" }.add(canonicalEntry).also {
+            noteCredentialMutation(now)
+        }
     }
 
     fun updateLogin(id: String, entry: LoginEntry) = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
-        checkNotNull(logins) { "Password vault is locked" }.update(id, entry)
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
+        require(CredentialPolicy.isValidCredentialId(id)) { "Credential identifier is invalid" }
+        val canonicalEntry = requireNotNull(CredentialPolicy.canonicalMutation(entry)) {
+            "Credential mutation is not allowed"
+        }
+        checkNotNull(logins) { "Password vault is locked" }.update(id, canonicalEntry).also {
+            noteCredentialMutation(now)
+        }
     }
 
     fun deleteLogin(id: String) = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
-        checkNotNull(logins) { "Password vault is locked" }.delete(id)
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
+        require(CredentialPolicy.isValidCredentialId(id)) { "Credential identifier is invalid" }
+        checkNotNull(logins) { "Password vault is locked" }.delete(id).also { deleted ->
+            vaultUnlockedAtEpochSeconds = now
+            if (deleted) schedule.localChangeEpochSeconds = now
+        }
     }
 
     fun touchLogin(id: String) = lifecycle.withOpen {
-        expireVault(System.currentTimeMillis() / 1_000)
+        val now = System.currentTimeMillis() / 1_000
+        expireVault(now)
+        require(CredentialPolicy.isValidCredentialId(id)) { "Credential identifier is invalid" }
         checkNotNull(logins) { "Password vault is locked" }.touch(id)
+        noteCredentialMutation(now)
     }
 
     fun recordHistory(url: String, title: String, visitedAtMillis: Long) = lifecycle.withOpen {
@@ -481,6 +508,11 @@ class XanhSyncRuntime(
     private fun expireVault(nowEpochSeconds: Long) {
         val last = vaultUnlockedAtEpochSeconds ?: return
         if (nowEpochSeconds - last >= VaultKeyStore.VAULT_TIMEOUT_SECONDS) lockVault()
+    }
+
+    private fun noteCredentialMutation(nowEpochSeconds: Long) {
+        vaultUnlockedAtEpochSeconds = nowEpochSeconds
+        schedule.localChangeEpochSeconds = nowEpochSeconds
     }
 
     private fun SyncConfiguration.toFxaConfig(): FxaConfig = when (val value = server) {

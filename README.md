@@ -19,7 +19,7 @@ is bundled in the application.
 | Minimum Android | 8.0 / API 26 |
 | Compile and target SDK | API 36 |
 | Java runtime | JDK 17 |
-| Build system | Android Gradle Plugin 9.3, Gradle 9.5, built-in Kotlin |
+| Build system | Android Gradle Plugin 9.3.1, Gradle 9.7.1, built-in Kotlin |
 | WebView compatibility layer | AndroidX WebKit 1.17.0 stable |
 
 This is a new application ID. Installation starts with an empty profile and
@@ -29,6 +29,10 @@ The scheduled AndroidX WebKit baseline workflow reads official Google Maven
 metadata weekly and fails if a shipping Gradle pin or its strict AAR/module
 checksums lag the newest stable release. Alpha, beta, RC and dynamic pins are
 rejected rather than treated as production updates.
+
+The separate Android build-tool baseline checks official Google Maven and
+Gradle release metadata weekly. It fails if the stable AGP/Gradle pins, Gradle
+distribution checksum or checked-in wrapper JAR no longer match upstream.
 
 ## Current capabilities
 
@@ -86,7 +90,7 @@ review.
 - Android SDK Platform 36 and Build Tools 36.0.0
 - An API 26+ device or emulator for instrumentation tests
 
-The Gradle wrapper downloads Gradle 9.5. Use the wrapper rather than a global
+The Gradle wrapper downloads Gradle 9.7.1. Use the wrapper rather than a global
 Gradle installation.
 
 ## Build and test

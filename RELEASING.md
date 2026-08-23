@@ -21,7 +21,8 @@ new and intentionally starts with an empty profile.
 ## Prerequisites
 
 - Push access and access to GitHub Actions, CodeQL and dependency-review results
-- JDK 17, Android SDK Platform 36 and Build Tools 36.0.0
+- JDK 17, Android SDK Platform 36, Build Tools 36.0.0, AGP 9.3.1 and the
+  checksum-verified Gradle 9.7.1 wrapper
 - API 26, 30, 33 and 36 devices/emulators, including phone, tablet and foldable
 - Multiple supported stable System WebView versions for compatibility checks
 - A System WebView exposing AndroidX `MULTI_PROFILE` for private-mode
@@ -53,7 +54,11 @@ Gradle project files, build logs or release attachments.
 3. Confirm the Play listing and changelog under `fastlane/metadata/android/`.
 4. Require green Android, CodeQL and dependency-review workflows for the exact
    candidate commit.
-5. Run `python3 scripts/verify_androidx_webkit_latest.py` with network access
+5. Run `python3 scripts/verify_android_toolchain_latest.py` with network access
+   and confirm the root plugin pins, wrapper distribution/checksum and wrapper
+   JAR match the newest official stable AGP and Gradle releases. Prereleases do
+   not satisfy this production gate.
+6. Run `python3 scripts/verify_androidx_webkit_latest.py` with network access
    and confirm the Gradle pin plus strict dependency checksums match the newest
    stable release in official Google Maven metadata. Prereleases never satisfy
    this production gate.

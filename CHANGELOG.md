@@ -14,6 +14,8 @@
 - Added Google Play listing metadata and a guarded production-signing task.
 - Added a scheduled, Google Maven-backed verifier that rejects stale,
   prerelease/dynamic or checksum-incomplete AndroidX WebKit dependency pins.
+- Added a weekly official-metadata verifier for the newest stable AGP and
+  Gradle releases, including the wrapper distribution and JAR checksums.
 - Added Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs and
   an authenticated Xanh-only password vault using Application Services 155.0.
 - Added idempotent Room-to-Places migration, WorkManager scheduling, OAuth
@@ -39,7 +41,7 @@
 
 - Renamed the application to Xanh Browser with application ID
   `io.github.lamppkk.xanhbrowser` and version code `10000`.
-- Rebuilt the project with AGP 9.3, Gradle 9.5, JDK 17, built-in Kotlin,
+- Rebuilt the project with AGP 9.3.1, Gradle 9.7.1, JDK 17, built-in Kotlin,
   AndroidX, Material, XML Views, View Binding and Room.
 - Migrated the Room browser database from schema 1 to schema 2 without
   discarding existing history/bookmarks; migrated rows become pending Places

@@ -104,7 +104,7 @@ class BrowserActivityTest {
             assertTrue(database.history().getAll().isEmpty())
         }
 
-        withTimeout(5_000) {
+        withTimeout(15_000) {
             while (privateProfileNames().isNotEmpty()) {
                 delay(25)
             }

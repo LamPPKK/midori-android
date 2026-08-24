@@ -138,8 +138,10 @@ on API 29 and newer; the background and multi-provider cases remain mandatory
 manual matrix checks.
 Open private browsing with a provider that supports `MULTI_PROFILE`, verify its
 cookies/storage are invisible to regular tabs, rotate the Activity, close it,
-and confirm the random profile is deleted. Kill the process mid-session and
-confirm the next cold start deletes the orphaned profile before opening a page.
+and confirm the random profile is either deleted or remains quarantined under
+the `xanh-private-` prefix when the provider retains used profiles in memory.
+Kill the process mid-session and confirm the next cold start deletes every
+orphaned/quarantined profile before opening a page.
 Repeat once with an unsupported provider and confirm no private page is loaded
 through the default profile. Confirm private URLs never enter Room, history,
 Sync, framework saved state, Xanh credential suggestions or `.xanhbackup`.

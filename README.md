@@ -92,8 +92,10 @@ release oracle.
   Xanh opts the private hierarchy out of Android Autofill/content capture and
   requests no IME personalized learning; OS provider/IME compliance remains
   platform-controlled. Its network user agent is identical to regular browsing. The
-  ephemeral profile is deleted after its Activity is destroyed or cleaned as
-  stale at the next process start. Explicitly downloaded files remain on the
+  provider is asked to delete the ephemeral profile after its Activity is
+  destroyed. Providers that keep a used profile resident leave its random name
+  quarantined; Xanh deletes every such stale profile at the next cold process
+  start, before creating a WebView. Explicitly downloaded files remain on the
   device after the private session closes. Renderer recovery is foreground-only
   and stops after one automatic attempt. A private download is retained only
   after native confirmation; both the file and its system DownloadManager record

@@ -76,7 +76,7 @@ class BrowserActivityTest {
         }
     }
 
-    @Test fun privateBrowsingNeverPersistsTabsAndDeletesItsProfile() = runBlocking {
+    @Test fun privateBrowsingNeverPersistsTabsAndQuarantinesItsProfile() = runBlocking {
         assumeTrue(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE))
         val context = ApplicationProvider.getApplicationContext<Context>()
         val database = BrowserDatabase.get(context)
@@ -84,10 +84,12 @@ class BrowserActivityTest {
         database.history().clear()
         val regular = BrowserRepository(database).createTab("https://regular.example")
         val typedPrivateUrl = "https://private.example/unsubmitted-secret"
+        var closedProfileName = ""
 
         ActivityScenario.launch(PrivateBrowserActivity::class.java).use { scenario ->
             val profiles = privateProfileNames()
             assertEquals(1, profiles.size)
+            closedProfileName = profiles.single()
             scenario.onActivity { it.setPrivateAddressForTest(typedPrivateUrl) }
             scenario.recreate()
             val afterRecreate = privateProfileNames()
@@ -104,11 +106,10 @@ class BrowserActivityTest {
             assertTrue(database.history().getAll().isEmpty())
         }
 
-        withTimeout(15_000) {
-            while (privateProfileNames().isNotEmpty()) {
-                delay(25)
-            }
-        }
+        val remainingProfiles = privateProfileNames()
+        assertTrue(
+            remainingProfiles.isEmpty() || remainingProfiles == listOf(closedProfileName),
+        )
         assertFalse(database.tabs().getAll().single().url.contains("duckduckgo"))
         assertTrue(database.history().getAll().isEmpty())
     }

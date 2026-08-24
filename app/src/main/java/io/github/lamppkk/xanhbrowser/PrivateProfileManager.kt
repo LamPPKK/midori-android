@@ -14,8 +14,6 @@ import java.util.UUID
 /** Owns ephemeral WebView profiles without ever loading them through ProfileStore. */
 internal object PrivateProfileManager {
     private const val PROFILE_PREFIX = "xanh-private-"
-    private const val DELETION_RETRY_DELAY_MILLISECONDS = 250L
-    private const val DELETION_RETRY_ATTEMPTS = 40
     private val validProfileName = Regex("^xanh-private-[0-9a-f]{32}$")
 
     fun isSupported(): Boolean =
@@ -41,16 +39,17 @@ internal object PrivateProfileManager {
             .getOrDefault(false)
     }
 
-    /** WebView provider teardown can remain asynchronous for several seconds after destroy(). */
+    /**
+     * Some providers release a destroyed WebView after a main-loop turn. Providers that keep a
+     * used profile resident will reject these bounded attempts; its private prefix then leaves it
+     * quarantined for deleteStaleProfiles() at the next cold process start.
+     */
     @UiThread
-    fun deleteWhenUnused(
-        profileName: String,
-        attemptsRemaining: Int = DELETION_RETRY_ATTEMPTS,
-    ) {
+    fun deleteWhenUnused(profileName: String, attemptsRemaining: Int = 3) {
         if (delete(profileName) || attemptsRemaining <= 0) return
         Handler(Looper.getMainLooper()).postDelayed(
             { deleteWhenUnused(profileName, attemptsRemaining - 1) },
-            DELETION_RETRY_DELAY_MILLISECONDS,
+            100,
         )
     }
 

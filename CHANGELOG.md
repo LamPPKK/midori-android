@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added the `0.1.0-alpha.1` Xanh WebView widget boundary. Regular and private
+  sessions no longer construct the provider widget directly; the current
+  serviced Android backend is reported as an explicit fallback while the
+  public WPE Android fork advances through API 26, parity and device gates.
 - Added independent multi-tab browsing with safe process-death restoration.
 - Added Room-backed tabs, history, bookmarks and download records with an
   exported versioned schema.

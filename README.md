@@ -41,6 +41,22 @@ browsing data.
 | Build system | Android Gradle Plugin 9.3.2, Gradle 9.7.1, built-in Kotlin |
 | WebView compatibility layer | AndroidX WebKit 1.17.0 stable |
 
+## Xanh WebView migration
+
+The application now constructs the Xanh-owned `XanhWebView` boundary instead
+of instantiating the provider widget directly. Its current backend is still the
+serviced Android System WebView and is reported explicitly as a fallback. The
+replacement target is the source-built
+[`LamPPKK/wpe-android`](https://github.com/LamPPKK/wpe-android) backend exposed
+by the common [`Xanh WebView`](https://github.com/LamPPKK/xanh-webview) SDK.
+
+This is an application-level embedding API, not an Android system WebView
+provider. The full API-26 app will switch only after WPE passes multi-profile,
+downloads, permissions, renderer recovery, accessibility, credential bridge,
+content-blocking, 16 KiB and device-matrix gates. Until then, the serviced
+provider remains the production fallback rather than silently reducing
+security or supported devices.
+
 This is a new application ID. Installation starts with an empty profile and
 does not import data from the legacy Android application.
 

@@ -51,7 +51,7 @@ import androidx.lifecycle.Lifecycle
 import io.github.lamppkk.xanhbrowser.databinding.ActivityBrowserBinding
 
 // Adds the same IME privacy opt-out to HTML editors inside the WebView.
-internal class PrivateWebView(context: Context) : WebView(context) {
+internal class PrivateWebView(context: Context) : XanhWebView(context) {
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         val connection = super.onCreateInputConnection(outAttrs)
         outAttrs.imeOptions = outAttrs.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING

@@ -335,7 +335,7 @@ class BrowserActivity : AppCompatActivity() {
         invalidateOptionsMenu()
     }
 
-    private fun createWebView(tabId: Long): WebView = WebView(this).apply {
+    private fun createWebView(tabId: Long): WebView = XanhWebView(this).apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         settings.apply {
             javaScriptEnabled = true

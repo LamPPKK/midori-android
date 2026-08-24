@@ -21,7 +21,7 @@ new and intentionally starts with an empty profile.
 ## Prerequisites
 
 - Push access and access to GitHub Actions, CodeQL and dependency-review results
-- JDK 17, Android SDK Platform 37.1, Build Tools 36.1.0, AGP 9.3.1 and the
+- JDK 17, Android SDK Platform 37.1, Build Tools 36.1.0, AGP 9.3.2 and the
   checksum-verified Gradle 9.7.1 wrapper
 - API 26, 30, 33 and 36 devices/emulators, including phone, tablet and foldable
 - Multiple supported stable System WebView versions for compatibility checks

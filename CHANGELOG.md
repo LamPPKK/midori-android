@@ -41,7 +41,7 @@
 
 - Renamed the application to Xanh Browser with application ID
   `io.github.lamppkk.xanhbrowser` and version code `10000`.
-- Rebuilt the project with AGP 9.3.1, Gradle 9.7.1, JDK 17, built-in Kotlin,
+- Rebuilt the project with AGP 9.3.2, Gradle 9.7.1, JDK 17, built-in Kotlin,
   AndroidX, Material, XML Views, View Binding and Room.
 - Migrated the Room browser database from schema 1 to schema 2 without
   discarding existing history/bookmarks; migrated rows become pending Places

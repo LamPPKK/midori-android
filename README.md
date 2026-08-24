@@ -20,7 +20,7 @@ is bundled in the application.
 | Compile SDK | Android SDK Platform 37.1 |
 | Target SDK | API 36 |
 | Java runtime | JDK 17 |
-| Build system | Android Gradle Plugin 9.3.1, Gradle 9.7.1, built-in Kotlin |
+| Build system | Android Gradle Plugin 9.3.2, Gradle 9.7.1, built-in Kotlin |
 | WebView compatibility layer | AndroidX WebKit 1.17.0 stable |
 
 This is a new application ID. Installation starts with an empty profile and

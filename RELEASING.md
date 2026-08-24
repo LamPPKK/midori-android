@@ -21,8 +21,10 @@ new and intentionally starts with an empty profile.
 ## Prerequisites
 
 - Push access and access to GitHub Actions, CodeQL and dependency-review results
-- JDK 17, Android SDK Platform 37.1, Build Tools 36.1.0, AGP 9.3.2 and the
-  checksum-verified Gradle 9.7.1 wrapper
+- JDK 17, Android SDK Platform 37.1, Build Tools 36.1.0, AGP 9.3.2, KSP 2.3.11
+  and the checksum-verified Gradle 9.7.1 wrapper
+- Stable AndroidX Activity 1.13.0, Annotation 1.10.0, AppCompat 1.8.0 and
+  Browser 1.10.0, plus Material Components 1.14.0, resolved from Google Maven
 - API 26, 30, 33 and 36 devices/emulators, including phone, tablet and foldable
 - Multiple supported stable System WebView versions for compatibility checks
 - A System WebView exposing AndroidX `MULTI_PROFILE` for private-mode

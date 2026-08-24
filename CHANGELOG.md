@@ -43,6 +43,9 @@
   `io.github.lamppkk.xanhbrowser` and version code `10000`.
 - Rebuilt the project with AGP 9.3.2, Gradle 9.7.1, JDK 17, built-in Kotlin,
   AndroidX, Material, XML Views, View Binding and Room.
+- Updated the Android UI/tooling stack to stable Activity 1.13.0, Annotation
+  1.10.0, AppCompat 1.8.0, Browser 1.10.0, Material Components 1.14.0 and KSP
+  2.3.11.
 - Migrated the Room browser database from schema 1 to schema 2 without
   discarding existing history/bookmarks; migrated rows become pending Places
   records until the idempotent importer assigns native identities.

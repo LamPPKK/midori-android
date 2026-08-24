@@ -39,6 +39,9 @@ AndroidX Core is pinned to stable 1.19.0. Its published AAR requires compile
 API 37, so every module builds against stable Android SDK Platform 37.1 while
 the shipping application continues to target API 36.
 
+The production UI/tooling stack uses stable Activity 1.13.0, Annotation 1.10.0,
+AppCompat 1.8.0, Browser 1.10.0, Material Components 1.14.0 and KSP 2.3.11.
+
 ## Current capabilities
 
 - Independent multi-tab browsing with safe process-death restoration

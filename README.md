@@ -1,13 +1,26 @@
 # Xanh Browser for Android
 
-Xanh Browser is the full multi-tab Android edition of the Xanh Browser family.
-It uses the system WebView and native Android UI components; no browser engine
-is bundled in the application.
+Xanh Browser is the privacy-first, full multi-tab Android edition of the Xanh
+Browser family. It combines the serviced system WebView with native Android UI
+components, so the application stays small and receives browser-engine updates
+through the installed WebView provider.
 
 > **Release status:** 1.0.0 is a release candidate. Local build, unit-test and
 > lint lanes pass, while production remains blocked until the signed-artifact,
 > emulator/device, security-scan and Play gates in
 > [RELEASING.md](RELEASING.md) are complete.
+
+## App preview
+
+<p align="center">
+  <img src="docs/images/xanh-browser-android-browsing.png" alt="Xanh Browser displaying a web page" width="320">
+  <img src="docs/images/xanh-browser-android-tabs.png" alt="Xanh Browser multi-tab overview" width="320">
+</p>
+
+<p align="center"><em>Current Android build showing the browser and its native tab overview.</em></p>
+
+The screenshots use a clean emulator profile and a neutral documentation page;
+they contain no personal browsing data.
 
 ## Application identity
 
@@ -164,7 +177,7 @@ wire format and conflict rules.
 
 The separately installable WPE WebKit experiment is intentionally the Lite
 one-tab edition in the
-[core repository](https://github.com/LamPPKK/midori-core/tree/master/app-webkit).
+[core repository](https://github.com/LamPPKK/midori-core/tree/main/app-webkit).
 The full multi-tab app remains on serviced Android System WebView until WPEView
 exposes the navigation, permission, download and 16 KiB-native-library baseline
 required by the full browser. The preview uses its own application ID and

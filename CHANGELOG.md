@@ -51,6 +51,8 @@
 - Updated the AndroidX WebKit compatibility layer to stable 1.17.0.
 - Updated AndroidX Lifecycle runtime/process integration to stable 2.11.0 and
   WorkManager to stable 2.11.2.
+- Updated AndroidX Core to stable 1.19.0 and moved every module to stable SDK
+  Platform 37.1 for compilation while retaining target API 36.
 - Hardened regular and private renderer termination handling: detach the exact
   failed WebView without calling back into it, abandon stale credential/file/
   location callbacks, recover only in foreground and stop after one attempt.

@@ -17,7 +17,8 @@ is bundled in the application.
 | Application ID | `io.github.lamppkk.xanhbrowser` |
 | Version | 1.0.0 (`10000`) |
 | Minimum Android | 8.0 / API 26 |
-| Compile and target SDK | API 36 |
+| Compile SDK | Android SDK Platform 37.1 |
+| Target SDK | API 36 |
 | Java runtime | JDK 17 |
 | Build system | Android Gradle Plugin 9.3.1, Gradle 9.7.1, built-in Kotlin |
 | WebView compatibility layer | AndroidX WebKit 1.17.0 stable |
@@ -33,6 +34,10 @@ rejected rather than treated as production updates.
 The separate Android build-tool baseline checks official Google Maven and
 Gradle release metadata weekly. It fails if the stable AGP/Gradle pins, Gradle
 distribution checksum or checked-in wrapper JAR no longer match upstream.
+
+AndroidX Core is pinned to stable 1.19.0. Its published AAR requires compile
+API 37, so every module builds against stable Android SDK Platform 37.1 while
+the shipping application continues to target API 36.
 
 ## Current capabilities
 
@@ -87,7 +92,7 @@ review.
 ## Prerequisites
 
 - JDK 17
-- Android SDK Platform 36 and Build Tools 36.0.0
+- Android SDK Platform 37.1 and Build Tools 36.1.0
 - An API 26+ device or emulator for instrumentation tests
 
 The Gradle wrapper downloads Gradle 9.7.1. Use the wrapper rather than a global

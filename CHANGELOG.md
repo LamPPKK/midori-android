@@ -49,6 +49,8 @@
 - Raised the supported platform range to API 26–36 and added adaptive layouts.
 - Moved downloads to DownloadManager and scoped storage.
 - Updated the AndroidX WebKit compatibility layer to stable 1.17.0.
+- Updated AndroidX Lifecycle runtime/process integration to stable 2.11.0 and
+  WorkManager to stable 2.11.2.
 - Hardened regular and private renderer termination handling: detach the exact
   failed WebView without calling back into it, abandon stale credential/file/
   location callbacks, recover only in foreground and stop after one attempt.

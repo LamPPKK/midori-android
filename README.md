@@ -1,4 +1,8 @@
-# Xanh Browser for Android
+<p align="center">
+  <img src="docs/images/xanh-browser-logo.png" alt="Xanh Browser logo" width="128">
+</p>
+
+<h1 align="center">Xanh Browser for Android</h1>
 
 Xanh Browser is the privacy-first, full multi-tab Android edition of the Xanh
 Browser family. It combines the serviced system WebView with native Android UI
@@ -17,10 +21,11 @@ through the installed WebView provider.
   <img src="docs/images/xanh-browser-android-tabs.png" alt="Xanh Browser multi-tab overview" width="320">
 </p>
 
-<p align="center"><em>Current Android build showing the browser and its native tab overview.</em></p>
+<p align="center"><em>The current native Android build showing browsing and tab management.</em></p>
 
-The screenshots use a clean emulator profile and a neutral documentation page;
-they contain no personal browsing data.
+These are direct captures from the application, not product mockups. They use a
+clean emulator profile and a neutral documentation page, with no personal
+browsing data.
 
 ## Application identity
 

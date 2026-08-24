@@ -10,6 +10,7 @@ class XanhBrowserApplication : Application(), DefaultLifecycleObserver {
     override fun onCreate() {
         super<Application>.onCreate()
         PrivateProfileManager.deleteStaleProfiles()
+        AdBlockCoordinator.get(this).installDefaultServiceWorkerClient()
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 

@@ -4,10 +4,17 @@ on:
   push:
     paths:
       - .github/workflows/android-ui-baseline.yml
+      - .github/workflows/android.yml
+      - ADBLOCK_CORE.lock
+      - scripts/verify_adblock_native_package.py
+      - scripts/tests/test_verify_adblock_native_package.py
       - scripts/verify_android_ui_latest.py
       - scripts/tests/test_verify_android_ui_latest.py
       - scripts/verify_android_application_services_latest.py
       - scripts/tests/test_verify_android_application_services_latest.py
+      - THIRD_PARTY_NOTICES.md
+      - app/src/main/assets/THIRD_PARTY_NOTICES.md
+      - app/src/main/assets/licenses/adblock-rust-MPL-2.0.txt
       - build.gradle
       - build.gradle.kts
       - '**/build.gradle'
@@ -20,10 +27,17 @@ on:
   pull_request:
     paths:
       - .github/workflows/android-ui-baseline.yml
+      - .github/workflows/android.yml
+      - ADBLOCK_CORE.lock
+      - scripts/verify_adblock_native_package.py
+      - scripts/tests/test_verify_adblock_native_package.py
       - scripts/verify_android_ui_latest.py
       - scripts/tests/test_verify_android_ui_latest.py
       - scripts/verify_android_application_services_latest.py
       - scripts/tests/test_verify_android_application_services_latest.py
+      - THIRD_PARTY_NOTICES.md
+      - app/src/main/assets/THIRD_PARTY_NOTICES.md
+      - app/src/main/assets/licenses/adblock-rust-MPL-2.0.txt
       - build.gradle
       - build.gradle.kts
       - '**/build.gradle'

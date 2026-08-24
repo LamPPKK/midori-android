@@ -83,6 +83,8 @@ release oracle.
 - Downloads through Android DownloadManager and scoped storage
 - File upload and per-origin geolocation consent through Activity Result APIs
 - Checked external-scheme handoff for supported main-frame user actions
+- Ad and tracker blocking, enabled by default for regular and private tabs,
+  backed by the shared Rust core in production
 - Asynchronous privacy clearing and bounded, foreground-only WebView
   render-process recovery with exact dead-view teardown
 - Password-encrypted portable backup for regular tabs, compatible with the
@@ -123,11 +125,39 @@ JavaScript is enabled because modern websites require it. The WebView boundary,
 URI validation and permission checks are therefore part of the release security
 review.
 
+## Ad and tracker blocking
+
+Production artifacts package `xanh-adblock-core` and call its stable C ABI from
+Kotlin through the direct JNA 5.18.1 dependency. The core embeds Brave
+`adblock-rust` 0.13.3; Android accepts only the exact Xanh core ABI
+`1.0.0-alpha.1`. Blocking is on by default and can be changed from either the
+regular or private browser menu.
+
+The same process-wide matcher covers subresource requests from regular and
+private WebViews. Xanh also installs a `ServiceWorkerClient` for the default
+WebView profile and, when `MULTI_PROFILE` is available, for the isolated private
+profile. Main-frame navigation is deliberately never blocked here; it remains
+under the browser's existing navigation and external-scheme policy.
+
+If the native library is unavailable, rejects an input or fails a call, Xanh
+uses a bounded seven-rule domain fallback. That fallback is Xanh-owned bootstrap
+data, not EasyList, and is intentionally much smaller than the Rust engine.
+Production release packaging therefore requires the reviewed native artifact;
+ordinary local builds without it exercise the fallback path only.
+
+This integration is not a claim of uBlock Origin feature parity. Android
+WebView does not expose every browser-extension interception primitive or all
+request metadata. Resource-type inference, redirect coverage, and third-party
+classification for service-worker requests are best-effort. `blob:` and
+`javascript:` URLs are outside the HTTP(S) network matcher.
+
 ## Prerequisites
 
 - JDK 17
 - Android SDK Platform 37.1 and Build Tools 36.1.0
 - An API 26+ device or emulator for instrumentation tests
+- For production adblock packaging: Rust 1.97.1, Android NDK 29.0.14206865 and
+  the `midori-core` revision pinned by `ADBLOCK_CORE.lock`
 
 The Gradle wrapper downloads Gradle 9.7.1. Use the wrapper rather than a global
 Gradle installation.
@@ -163,7 +193,10 @@ Important outputs:
 
 `bundleRelease` does not produce a Play-uploadable artifact without signing
 configuration. Follow [RELEASING.md](RELEASING.md) and use the guarded
-`bundleProductionRelease` task for production.
+`bundleProductionRelease` task for production. That task also requires
+`XANH_ADBLOCK_NATIVE_DIR` (or `-PxanhAdblockNativeDir`) to point to a verified
+package containing exactly `arm64-v8a`, `armeabi-v7a` and `x86_64` builds of
+`libxanh_adblock_core.so`.
 
 ## Encrypted backup and provider sync
 
@@ -232,6 +265,10 @@ mirror.
 | `app/src/main/.../AddressResolver.kt` | Validated address and search resolution |
 | `backup-core/` | Portable encrypted backup codec and cross-platform vectors |
 | `sync-core/` | Pinned Mozilla Application Services Android integration |
+| `ADBLOCK_CORE.lock` | Reviewed core, adblock-rust, Rust and NDK provenance pins |
+| `app/src/main/.../AdBlockCoordinator.kt` | WebView/service-worker interception, JNA host and bounded fallback |
+| `app/src/main/assets/adblock/` | Seven-rule bootstrap fallback used when native matching is unavailable |
+| `scripts/verify_adblock_native_package.py` | Three-ABI, symbol, provenance, digest and 16 KiB ELF gate |
 | `app/schemas/` | Exported Room schemas and the tested 1→2 migration contract |
 | `app/src/test/` | Local unit tests |
 | `app/src/androidTest/` | Activity and database instrumentation tests |
@@ -244,6 +281,9 @@ GitHub Actions builds and lints every push and pull request, runs CodeQL, blocks
 high-severity dependency-review findings and compiles Android test artifacts.
 A scheduled instrumentation matrix targets API 26, 30, 33 and 36 with phone,
 tablet and foldable profiles. CI AABs are unsigned verification artifacts.
+Production adblock evidence additionally requires native instrumentation against
+the packaged core; unit tests with the injectable matcher do not replace that
+device check.
 
 ## Release scope
 

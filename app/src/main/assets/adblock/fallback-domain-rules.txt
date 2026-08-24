@@ -1,0 +1,10 @@
+! Xanh Browser bounded bootstrap rules
+! This Xanh-owned ABP-domain subset is not EasyList and is not the brave/adblock-rust runtime.
+! It is replaced through AdBlockCoordinator.installMatcher when the reviewed JNI engine is present.
+||doubleclick.net^
+||googlesyndication.com^
+||google-analytics.com^
+||adservice.google.com^
+||amazon-adsystem.com^
+||scorecardresearch.com^
+||connect.facebook.net^$third-party

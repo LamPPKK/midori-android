@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import sys
@@ -19,12 +20,16 @@ MAVEN_CENTRAL = "https://repo1.maven.org/maven2"
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_GRADLE_FILE_BYTES = 1024 * 1024
 MAX_GRADLE_FILES = 128
+MPL_2_LICENSE_SHA256 = (
+    "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+)
 IGNORED_PATH_PARTS = {".git", ".gradle", "build"}
 STABLE_VERSION_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
 )
 DATE_VERSION_PATTERN = re.compile(r"^20[0-9]{6}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 KSP_PLUGIN_ID = "com.google.devtools.ksp"
 EXTERNALLY_GOVERNED_COORDINATES = {
     ("androidx.webkit", "webkit"),
@@ -35,6 +40,9 @@ EXTERNALLY_GOVERNED_COORDINATES = {
     ("org.mozilla.appservices", "syncmanager"),
     ("org.mozilla.appservices", "logins"),
     ("org.mozilla.appservices", "tabs"),
+    # The reviewed adblock host pins this direct AAR with strict Gradle checksums;
+    # its compatibility cadence follows the native ABI gate, not the UI baseline.
+    ("net.java.dev.jna", "jna"),
 }
 
 
@@ -459,6 +467,76 @@ def verify_project(
     return releases
 
 
+def verify_packaged_adblock_legal(root: Path) -> None:
+    repository_notice = _read_bounded_bytes(root / "THIRD_PARTY_NOTICES.md", 256 * 1024)
+    packaged_notice = _read_bounded_bytes(
+        root / "app/src/main/assets/THIRD_PARTY_NOTICES.md", 256 * 1024
+    )
+    if packaged_notice != repository_notice:
+        raise VerificationError(
+            "the APK third-party notice must be byte-for-byte identical to the repository notice"
+        )
+    license_contents = _read_bounded_bytes(
+        root / "app/src/main/assets/licenses/adblock-rust-MPL-2.0.txt",
+        128 * 1024,
+    )
+    if hashlib.sha256(license_contents).hexdigest() != MPL_2_LICENSE_SHA256:
+        raise VerificationError("the packaged adblock-rust MPL-2.0 license is missing or changed")
+
+
+def verify_adblock_source_contract(root: Path) -> None:
+    lock_text = _read_bounded(root / "ADBLOCK_CORE.lock", 64 * 1024)
+    fields: dict[str, str] = {}
+    for line in lock_text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        if line.count("=") != 1:
+            raise VerificationError("ADBLOCK_CORE.lock contains a malformed line")
+        key, value = line.split("=", 1)
+        if not key or not value or key in fields:
+            raise VerificationError("ADBLOCK_CORE.lock contains a duplicate or empty field")
+        fields[key] = value
+    expected = {
+        "format": "1",
+        "core_version": "1.0.0-alpha.1",
+        "adblock_rust_version": "0.13.3",
+        "adblock_rust_revision": "886d45dcf5283ce8eddc6d961e7dd27966ab23f2",
+        "rust_version": "1.97.1",
+        "ndk_version": "29.0.14206865",
+        "android_api": "26",
+    }
+    if set(fields) != {*expected, "core_git_revision"}:
+        raise VerificationError("ADBLOCK_CORE.lock has an unexpected field set")
+    if any(fields[key] != value for key, value in expected.items()):
+        raise VerificationError("ADBLOCK_CORE.lock does not match the reviewed toolchain/core ABI")
+    revision = fields["core_git_revision"]
+    if GIT_SHA_PATTERN.fullmatch(revision) is None:
+        raise VerificationError("ADBLOCK_CORE.lock must pin a full lowercase core Git revision")
+
+    workflow = _read_bounded(root / ".github/workflows/android.yml", 512 * 1024)
+    checkout = re.compile(
+        r"(?m)^\s+repository: LamPPKK/midori-core\s*$\n"
+        + rf"^\s+ref: {revision}\s*$\n"
+        + r"^\s+path: _xanh_adblock_core\s*$"
+    )
+    if len(checkout.findall(workflow)) != 1:
+        raise VerificationError("Android CI does not check out the exact locked adblock core")
+    required_workflow_lines = (
+        "dtolnay/rust-toolchain@1.97.1",
+        "ndk;29.0.14206865",
+        "_xanh_adblock_core/scripts/build-adblock-android.sh",
+        "scripts/verify_adblock_native_package.py",
+        '-PxanhAdblockNativeDir="$RUNNER_TEMP/xanh-adblock-android"',
+        ":app:verifyAdblockNativeRelease",
+        "Verify packaged adblock libraries and legal resources",
+        "base/assets/THIRD_PARTY_NOTICES.md",
+        "base/assets/licenses/adblock-rust-MPL-2.0.txt",
+    )
+    for required in required_workflow_lines:
+        if required not in workflow:
+            raise VerificationError(f"Android CI is missing the adblock invariant: {required}")
+
+
 def _validate_metadata_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
@@ -519,6 +597,8 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         root = arguments.root.resolve()
+        verify_packaged_adblock_legal(root)
+        verify_adblock_source_contract(root)
         required_keys = set(project_dependency_pins(root))
         if arguments.metadata_directory:
             metadata_by_key = {

@@ -42,6 +42,16 @@
 - Added API 29+ device instrumentation that terminates the real regular-tab
   renderer, verifies an exact replacement, and proves that a repeated crash
   reaches the stable stopped state instead of an automatic reload loop.
+- Added ad and tracker blocking for regular and private WebViews, plus the
+  default and isolated-profile service-worker controllers. Production calls
+  `xanh-adblock-core`/Brave `adblock-rust` 0.13.3 through JNA, while a bounded
+  seven-rule baseline protects supported subresources if native matching is
+  unavailable.
+- Added an enabled-by-default content-blocking toggle to both browser modes and
+  kept main-frame navigation under the existing navigation policy.
+- Added fail-closed native-package verification for the exact Xanh core ABI,
+  three Android ABIs, source provenance, exported symbols, SHA-256 digests and
+  16 KiB ELF alignment, with native device instrumentation required for release.
 
 ### Changed
 
@@ -93,6 +103,9 @@
   replacement.
 - Isolated private cookies, cache, service workers and storage from the regular
   WebView profile and delete orphaned private profiles on process startup.
+- Bound content-blocker inputs and failures at the WebView/JNA boundary, retain
+  the seven-rule fallback after recoverable native errors, and never apply
+  subresource filter decisions to main-frame navigation.
 
 ### Removed
 

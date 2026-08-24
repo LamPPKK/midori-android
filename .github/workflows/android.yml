@@ -13,15 +13,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check out the exact reviewed adblock core
+        uses: actions/checkout@v6
+        with:
+          repository: LamPPKK/midori-core
+          ref: 1a04af4883e100dca1962334faddcecac665a2e5
+          path: _xanh_adblock_core
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager 'platforms;android-37.1' 'build-tools;36.1.0'
+      - run: sdkmanager 'platforms;android-37.1' 'build-tools;36.1.0' 'ndk;29.0.14206865'
+      - name: Build and verify the exact native content blocker
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
+        run: |
+          ./_xanh_adblock_core/scripts/build-adblock-android.sh \
+            "$RUNNER_TEMP/xanh-adblock-android"
+          python3 scripts/verify_adblock_native_package.py \
+            "$RUNNER_TEMP/xanh-adblock-android" ADBLOCK_CORE.lock
       - run: >-
           ./gradlew --no-daemon
+          -PxanhAdblockNativeDir="$RUNNER_TEMP/xanh-adblock-android"
           :backup-core:testDebugUnitTest
           :sync-core:lintDebug
           :sync-core:testDebugUnitTest
@@ -33,7 +54,24 @@ jobs:
           :app:testDebugUnitTest
           :app:assembleDebug
           :app:assembleAndroidTest
+          :app:verifyAdblockNativeRelease
           :app:bundleRelease
+      - name: Verify packaged adblock libraries and legal resources
+        run: |
+          aab='app/build/outputs/bundle/release/app-release.aab'
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -Z1 "$aab" | grep -Fx "base/lib/$abi/libxanh_adblock_core.so"
+          done
+          test "$(unzip -Z1 "$aab" | grep -Ec '^base/lib/[^/]+/libxanh_adblock_core\.so$')" -eq 3
+          evidence="$(mktemp -d)"
+          trap 'rm -rf "$evidence"' EXIT
+          unzip -p "$aab" base/assets/THIRD_PARTY_NOTICES.md \
+            >"$evidence/THIRD_PARTY_NOTICES.md"
+          unzip -p "$aab" base/assets/licenses/adblock-rust-MPL-2.0.txt \
+            >"$evidence/adblock-rust-MPL-2.0.txt"
+          cmp THIRD_PARTY_NOTICES.md "$evidence/THIRD_PARTY_NOTICES.md"
+          cmp app/src/main/assets/licenses/adblock-rust-MPL-2.0.txt \
+            "$evidence/adblock-rust-MPL-2.0.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: xanh-browser-android
@@ -46,6 +84,7 @@ jobs:
             sync-core/build/outputs/aar/*.aar
             sync-core/build/maven/**
             sync-core/build/reports/lint-results-debug.*
+            ${{ runner.temp }}/xanh-adblock-android/ADBLOCK_CORE.manifest
       - uses: anchore/sbom-action@v0
         with:
           path: .

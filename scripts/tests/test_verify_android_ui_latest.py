@@ -232,7 +232,7 @@ class AndroidUILatestTests(unittest.TestCase):
             with self.assertRaises(MODULE.VerificationError):
                 MODULE.verify_project(root, metadata_set(extra_keys=extras))
 
-    def test_untracked_dependency_fails_and_dedicated_families_are_allowed(self) -> None:
+    def test_untracked_dependency_fails_and_dedicated_engine_families_are_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = self.project(directory)
             path = root / "app/build.gradle"
@@ -251,7 +251,8 @@ class AndroidUILatestTests(unittest.TestCase):
                 + 'implementation "androidx.webkit:webkit:1.17.0"\n'
                 + 'implementation "org.mozilla.appservices:places:155.0"\n'
                 + 'implementation "org.wpewebkit.wpeview:wpeview:${wpeVersion}"\n'
-                + 'implementation "io.github.lamppkk.xanhbrowser:xanh-sync-android:1.0.0-alpha.1"\n',
+                + 'implementation "io.github.lamppkk.xanhbrowser:xanh-sync-android:1.0.0-alpha.1"\n'
+                + 'implementation "net.java.dev.jna:jna:5.18.1@aar"\n',
                 encoding="utf-8",
             )
             MODULE.project_dependency_pins(root)
@@ -309,6 +310,78 @@ class AndroidUILatestTests(unittest.TestCase):
             link.symlink_to(path)
             with self.assertRaises(MODULE.VerificationError):
                 MODULE._read_bounded_bytes(link, MODULE.MAX_METADATA_BYTES)
+
+    def test_packaged_adblock_legal_files_are_exact_and_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            notice = b"complete notice\n"
+            (root / "THIRD_PARTY_NOTICES.md").write_bytes(notice)
+            assets = root / "app/src/main/assets"
+            (assets / "licenses").mkdir(parents=True)
+            (assets / "THIRD_PARTY_NOTICES.md").write_bytes(notice)
+            canonical_license = (
+                Path(__file__).resolve().parents[2]
+                / "app/src/main/assets/licenses/adblock-rust-MPL-2.0.txt"
+            ).read_bytes()
+            (assets / "licenses/adblock-rust-MPL-2.0.txt").write_bytes(
+                canonical_license
+            )
+            MODULE.verify_packaged_adblock_legal(root)
+
+            (assets / "THIRD_PARTY_NOTICES.md").write_bytes(b"stale notice\n")
+            with self.assertRaises(MODULE.VerificationError):
+                MODULE.verify_packaged_adblock_legal(root)
+            (assets / "THIRD_PARTY_NOTICES.md").write_bytes(notice)
+            (assets / "licenses/adblock-rust-MPL-2.0.txt").write_bytes(
+                b"not the MPL license\n"
+            )
+            with self.assertRaises(MODULE.VerificationError):
+                MODULE.verify_packaged_adblock_legal(root)
+
+    def test_adblock_source_contract_binds_ci_to_exact_core_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            revision = "a" * 40
+            (root / "ADBLOCK_CORE.lock").write_text(
+                "\n".join(
+                    (
+                        "format=1",
+                        f"core_git_revision={revision}",
+                        "core_version=1.0.0-alpha.1",
+                        "adblock_rust_version=0.13.3",
+                        "adblock_rust_revision=886d45dcf5283ce8eddc6d961e7dd27966ab23f2",
+                        "rust_version=1.97.1",
+                        "ndk_version=29.0.14206865",
+                        "android_api=26",
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            workflows = root / ".github/workflows"
+            workflows.mkdir(parents=True)
+            workflow = """
+              repository: LamPPKK/midori-core
+              ref: REVISION
+              path: _xanh_adblock_core
+              uses: dtolnay/rust-toolchain@1.97.1
+              run: sdkmanager 'ndk;29.0.14206865'
+              run: ./_xanh_adblock_core/scripts/build-adblock-android.sh
+              run: python3 scripts/verify_adblock_native_package.py
+              run: ./gradlew -PxanhAdblockNativeDir="$RUNNER_TEMP/xanh-adblock-android"
+              run: :app:verifyAdblockNativeRelease
+              name: Verify packaged adblock libraries and legal resources
+              run: unzip -p app.aab base/assets/THIRD_PARTY_NOTICES.md
+              run: unzip -p app.aab base/assets/licenses/adblock-rust-MPL-2.0.txt
+            """.replace("REVISION", revision)
+            (workflows / "android.yml").write_text(workflow, encoding="utf-8")
+            MODULE.verify_adblock_source_contract(root)
+
+            (workflows / "android.yml").write_text(
+                workflow.replace(revision, "b" * 40), encoding="utf-8"
+            )
+            with self.assertRaises(MODULE.VerificationError):
+                MODULE.verify_adblock_source_contract(root)
 
 
 if __name__ == "__main__":

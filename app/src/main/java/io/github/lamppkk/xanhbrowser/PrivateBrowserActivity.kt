@@ -30,6 +30,7 @@ import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -67,6 +68,7 @@ internal class PrivateWebView(context: Context) : WebView(context) {
 class PrivateBrowserActivity : AppCompatActivity() {
     private val session by viewModels<PrivateSessionViewModel>()
     private lateinit var binding: ActivityBrowserBinding
+    private lateinit var adBlockCoordinator: AdBlockCoordinator
     private var webView: WebView? = null
     private var mobileUserAgent: String? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -102,6 +104,7 @@ class PrivateBrowserActivity : AppCompatActivity() {
         enableEdgeToEdge()
         binding = ActivityBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        adBlockCoordinator = AdBlockCoordinator.get(this)
         binding.root.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             binding.root.importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS
@@ -182,6 +185,7 @@ class PrivateBrowserActivity : AppCompatActivity() {
         check(webView == null)
         val privateWebView = PrivateWebView(this)
         PrivateProfileManager.attach(privateWebView, session.profileName)
+        adBlockCoordinator.installProfileServiceWorkerClient(privateWebView)
         privateWebView.layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -430,6 +434,7 @@ class PrivateBrowserActivity : AppCompatActivity() {
         menu.findItem(R.id.action_back)?.isEnabled = webView?.canGoBack() == true
         menu.findItem(R.id.action_forward)?.isEnabled = webView?.canGoForward() == true
         menu.findItem(R.id.action_desktop_site)?.isChecked = session.desktopMode
+        menu.findItem(R.id.action_content_blocking)?.isChecked = adBlockCoordinator.isEnabled()
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -439,12 +444,22 @@ class PrivateBrowserActivity : AppCompatActivity() {
         R.id.action_reload -> { webView?.reload(); true }
         R.id.action_share -> { sharePage(); true }
         R.id.action_desktop_site -> { toggleDesktopMode(item); true }
+        R.id.action_content_blocking -> {
+            val enabled = !adBlockCoordinator.isEnabled()
+            adBlockCoordinator.setEnabled(enabled)
+            item.isChecked = enabled
+            webView?.reload()
+            true
+        }
         R.id.action_close_private -> { finish(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
     @SuppressLint("MissingOnRenderProcessGone") // onRenderProcessGone is implemented below.
     private inner class PrivateWebViewClient : WebViewClient() {
+        @Volatile
+        private var sourceUrl: String? = null
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             when (request.url.scheme?.lowercase()) {
                 "http", "https" -> !AddressResolver.isValidWebUrl(request.url.toString())
@@ -459,14 +474,21 @@ class PrivateBrowserActivity : AppCompatActivity() {
                 else -> true
             }
 
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest,
+        ): WebResourceResponse? = adBlockCoordinator.shouldIntercept(request, sourceUrl)
+
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             if (view == null || webView !== view) return
+            sourceUrl = url?.takeIf(AddressResolver::isValidWebUrl)
             binding.loadingProgress.progress = 0
             binding.loadingProgress.visibility = View.VISIBLE
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
             if (view == null || webView !== view) return
+            sourceUrl = url?.takeIf(AddressResolver::isValidWebUrl)
             if (url != null && AddressResolver.isValidWebUrl(url)) {
                 session.currentUrl = url
                 binding.urlBar.setText(url)

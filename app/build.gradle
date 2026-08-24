@@ -21,6 +21,8 @@ def mozillaHostedSync = providers.gradleProperty('xanhSyncMozillaHosted')
     .orElse(providers.environmentVariable('XANH_SYNC_MOZILLA_HOSTED')).orElse('0').get() == '1'
 def mozillaProductionApproved = providers.gradleProperty('xanhFxaProductionApproved')
     .orElse(providers.environmentVariable('XANH_FXA_PRODUCTION_APPROVED')).orElse('0').get() == '1'
+def adblockNativeDir = providers.gradleProperty('xanhAdblockNativeDir')
+    .orElse(providers.environmentVariable('XANH_ADBLOCK_NATIVE_DIR')).orNull
 
 android {
     namespace = 'io.github.lamppkk.xanhbrowser'
@@ -40,11 +42,16 @@ android {
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         buildConfigField 'String', 'XANH_FXA_CLIENT_ID', "\"${escapedFxaClientId}\""
         buildConfigField 'boolean', 'XANH_SYNC_SELF_HOSTED_ONLY', selfHostedSyncOnly.toString()
+        buildConfigField 'boolean', 'XANH_ADBLOCK_NATIVE_PACKAGED', (adblockNativeDir != null).toString()
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
         ksp {
             arg('room.schemaLocation', "$projectDir/schemas")
             arg('room.incremental', 'true')
         }
     }
+    ndkVersion = '29.0.14206865'
 
     signingConfigs {
         if (hasUploadSigning) {
@@ -86,6 +93,32 @@ android {
 
     sourceSets {
         androidTest.assets.srcDir "$projectDir/schemas"
+        if (adblockNativeDir) main.jniLibs.srcDir file(adblockNativeDir)
+    }
+}
+
+tasks.register('verifyAdblockNativePackage', Exec) {
+    onlyIf { adblockNativeDir != null }
+    doFirst {
+        commandLine 'python3',
+            rootProject.file('scripts/verify_adblock_native_package.py'),
+            file(adblockNativeDir),
+            rootProject.file('ADBLOCK_CORE.lock')
+    }
+}
+
+tasks.matching { it.name == 'preBuild' }.configureEach {
+    dependsOn 'verifyAdblockNativePackage'
+}
+
+tasks.register('verifyAdblockNativeRelease') {
+    dependsOn 'verifyAdblockNativePackage'
+    doLast {
+        if (!adblockNativeDir) {
+            throw new GradleException(
+                'Production release requires -PxanhAdblockNativeDir (or XANH_ADBLOCK_NATIVE_DIR)'
+            )
+        }
     }
 }
 
@@ -102,7 +135,8 @@ tasks.matching { it.name == 'bundleRelease' }.configureEach {
 }
 
 tasks.register('bundleProductionRelease') {
-    dependsOn 'verifyReleaseSigning', 'verifyFirefoxSyncRelease', 'bundleRelease'
+    dependsOn 'verifyReleaseSigning', 'verifyFirefoxSyncRelease',
+        'verifyAdblockNativeRelease', 'bundleRelease'
 }
 
 tasks.register('verifyFirefoxSyncRelease') {
@@ -136,6 +170,7 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.17.0'
     implementation 'androidx.work:work-runtime-ktx:2.11.2'
     implementation 'com.google.android.material:material:1.14.0'
+    implementation 'net.java.dev.jna:jna:5.18.1@aar'
     ksp 'androidx.room:room-compiler:2.8.4'
 
     testImplementation 'junit:junit:4.13.2'

@@ -60,6 +60,7 @@ import org.json.JSONObject
 class BrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityBrowserBinding
     private lateinit var repository: BrowserRepository
+    private lateinit var adBlockCoordinator: AdBlockCoordinator
     private val sessions = mutableMapOf<Long, WebView>()
     private val mobileUserAgents = mutableMapOf<Long, String>()
     private val desktopModes = mutableMapOf<Long, Boolean>()
@@ -129,6 +130,7 @@ class BrowserActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         repository = BrowserRepository(this)
+        adBlockCoordinator = AdBlockCoordinator.get(this)
         SyncCoordinator.get(this).scheduleBackgroundSync()
         applyInsets()
         configureAddressBar()
@@ -356,7 +358,7 @@ class BrowserActivity : AppCompatActivity() {
         credentialBridges[tabId] = XanhCredentialBridge(this@BrowserActivity, this, tabId).also {
             it.install()
         }
-        webViewClient = XanhWebViewClient(this@BrowserActivity, tabId)
+        webViewClient = XanhWebViewClient(this@BrowserActivity, tabId, adBlockCoordinator)
         webChromeClient = XanhWebChromeClient(this@BrowserActivity, tabId, this)
         setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             enqueueDownload(url, userAgent, contentDisposition, mimeType)
@@ -848,6 +850,7 @@ class BrowserActivity : AppCompatActivity() {
         menu.findItem(R.id.action_back)?.isEnabled = activeWebView()?.canGoBack() == true
         menu.findItem(R.id.action_forward)?.isEnabled = activeWebView()?.canGoForward() == true
         menu.findItem(R.id.action_desktop_site)?.isChecked = desktopModes[activeTabId] ?: false
+        menu.findItem(R.id.action_content_blocking)?.isChecked = adBlockCoordinator.isEnabled()
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -867,6 +870,13 @@ class BrowserActivity : AppCompatActivity() {
         R.id.action_reload -> { activeWebView()?.reload(); true }
         R.id.action_share -> { sharePage(); true }
         R.id.action_desktop_site -> { requestDesktopSite(item); true }
+        R.id.action_content_blocking -> {
+            val enabled = !adBlockCoordinator.isEnabled()
+            adBlockCoordinator.setEnabled(enabled)
+            item.isChecked = enabled
+            activeWebView()?.reload()
+            true
+        }
         R.id.action_add_bookmark -> { saveBookmark(); true }
         R.id.action_bookmarks -> { openLibrary(LibraryActivity.Mode.BOOKMARKS); true }
         R.id.action_history -> { openLibrary(LibraryActivity.Mode.HISTORY); true }

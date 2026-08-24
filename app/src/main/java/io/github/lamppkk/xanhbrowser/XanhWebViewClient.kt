@@ -8,6 +8,7 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.SafeBrowsingResponse
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -17,7 +18,11 @@ import androidx.annotation.RequiresApi
 internal class XanhWebViewClient(
     private val activity: BrowserActivity,
     private val tabId: Long,
+    private val adBlockCoordinator: AdBlockCoordinator,
 ) : WebViewClient() {
+    @Volatile
+    private var sourceUrl: String? = null
+
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
         when (request.url.scheme?.lowercase()) {
             "http", "https" -> !AddressResolver.isValidWebUrl(request.url.toString())
@@ -32,14 +37,21 @@ internal class XanhWebViewClient(
             else -> true
         }
 
+    override fun shouldInterceptRequest(
+        view: WebView,
+        request: WebResourceRequest,
+    ): WebResourceResponse? = adBlockCoordinator.shouldIntercept(request, sourceUrl)
+
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         if (view == null || !activity.isCurrentSession(tabId, view)) return
+        sourceUrl = url?.takeIf(AddressResolver::isValidWebUrl)
         activity.onNavigationStarted(tabId, url)
         activity.onProgress(tabId, 0)
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {
         if (view == null || !activity.isCurrentSession(tabId, view)) return
+        sourceUrl = url?.takeIf(AddressResolver::isValidWebUrl)
         activity.onNavigationCommitted(tabId, url)
         activity.onPageChanged(tabId, url, view?.title)
     }

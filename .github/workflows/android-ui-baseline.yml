@@ -1,4 +1,4 @@
-name: Android UI stable baseline
+name: Android direct-dependency stable baseline
 
 on:
   push:
@@ -6,21 +6,33 @@ on:
       - .github/workflows/android-ui-baseline.yml
       - scripts/verify_android_ui_latest.py
       - scripts/tests/test_verify_android_ui_latest.py
+      - scripts/verify_android_application_services_latest.py
+      - scripts/tests/test_verify_android_application_services_latest.py
       - build.gradle
       - build.gradle.kts
       - '**/build.gradle'
       - '**/build.gradle.kts'
       - gradle/verification-metadata.xml
+      - sync-core/APPLICATION_SERVICES.lock
+      - sync-core/build.gradle
+      - sync-core/src/main/assets/THIRD_PARTY_NOTICES.md
+      - settings.gradle
   pull_request:
     paths:
       - .github/workflows/android-ui-baseline.yml
       - scripts/verify_android_ui_latest.py
       - scripts/tests/test_verify_android_ui_latest.py
+      - scripts/verify_android_application_services_latest.py
+      - scripts/tests/test_verify_android_application_services_latest.py
       - build.gradle
       - build.gradle.kts
       - '**/build.gradle'
       - '**/build.gradle.kts'
       - gradle/verification-metadata.xml
+      - sync-core/APPLICATION_SERVICES.lock
+      - sync-core/build.gradle
+      - sync-core/src/main/assets/THIRD_PARTY_NOTICES.md
+      - settings.gradle
   schedule:
     - cron: '29 6 * * 1'
   workflow_dispatch:
@@ -39,7 +51,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Test Android UI latest-stable policy
+      - name: Test Android direct-dependency latest-stable policy
         run: python3 -B -m unittest discover -s scripts/tests -p 'test_verify_android_ui_latest.py' -v
-      - name: Verify Android UI and KSP use official stable releases
+      - name: Verify direct Android dependencies use official stable releases
         run: python3 scripts/verify_android_ui_latest.py
+      - name: Test Android Application Services latest-stable policy
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_verify_android_application_services_latest.py' -v
+      - name: Verify Android AARs match latest stable Application Services
+        run: python3 scripts/verify_android_application_services_latest.py

@@ -65,9 +65,15 @@ Gradle project files, build logs or release attachments.
    stable release in official Google Maven metadata. Prereleases never satisfy
    this production gate.
 7. Run `python3 scripts/verify_android_ui_latest.py` with network access and
-   confirm Activity, Annotation, AppCompat, Browser, Material Components and
-   KSP match the newest stable official releases. Every Gradle pin and required
-   strict SHA-256 entry must agree; prerelease, dynamic or mixed versions fail.
+   confirm every direct Android platform, UI and test dependency not owned by a
+   dedicated engine/toolchain gate matches its newest stable official release.
+   Every Gradle pin and required strict SHA-256 entry must agree; prerelease,
+   dynamic or mixed versions fail.
+8. Run `python3 scripts/verify_android_application_services_latest.py` with
+   network access and confirm the Android lock, five direct AAR versions,
+   official tag/revision, third-party notice and strict AAR/POM checksums all
+   match Mozilla's newest stable Application Services release and resolve only
+   from Mozilla's exclusive official Maven repository.
 
 Verification:
 

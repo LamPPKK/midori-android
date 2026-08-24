@@ -42,9 +42,16 @@ the shipping application continues to target API 36.
 The production UI/tooling stack uses stable Activity 1.13.0, Annotation 1.10.0,
 AppCompat 1.8.0, Browser 1.10.0, Material Components 1.14.0 and KSP 2.3.11.
 A dedicated weekly baseline reads official Google Maven and Maven Central
-metadata for those coordinates, rejects prerelease/dynamic or inconsistent
-Gradle pins, and requires the strict verification metadata to contain valid
-SHA-256 entries for every selected UI/tooling artifact.
+metadata for those coordinates plus Core, Lifecycle, Biometric, RecyclerView,
+Room, WorkManager, AndroidX Test and JUnit. It rejects prerelease/dynamic or
+inconsistent Gradle pins and requires strict SHA-256 entries for every selected
+artifact. WebKit, AGP/Gradle and Mozilla Application Services remain covered by
+their dedicated engine/toolchain baselines. The Android Application Services
+gate resolves Mozilla's official stable tags, then binds the five direct AARs,
+the checked-in lock/revision, notice and strict AAR/POM checksums together; it
+also requires fail-closed exclusive resolution from Mozilla's official Maven
+repository and does not trust the legacy per-artifact Maven metadata as a
+release oracle.
 
 ## Current capabilities
 

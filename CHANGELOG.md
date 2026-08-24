@@ -14,8 +14,12 @@
 - Added Google Play listing metadata and a guarded production-signing task.
 - Added a scheduled, Google Maven-backed verifier that rejects stale,
   prerelease/dynamic or checksum-incomplete AndroidX WebKit dependency pins.
-- Added a weekly official-Maven baseline for Activity, Annotation, AppCompat,
-  Browser, Material Components and KSP, including strict checksum enforcement.
+- Added a weekly official-Maven baseline for every direct Android platform, UI
+  and test dependency not owned by an engine/toolchain gate, including Room,
+  WorkManager and KSP families plus strict checksum enforcement.
+- Added an Android Application Services tag verifier that binds the five direct
+  Mozilla AARs to the newest official tag, exact source revision, lock, notice
+  and strict AAR/POM checksums instead of relying on stale Maven metadata.
 - Added a weekly official-metadata verifier for the newest stable AGP and
   Gradle releases, including the wrapper distribution and JAR checksums.
 - Added Mozilla Accounts / Firefox Sync for bookmarks, history, remote tabs and

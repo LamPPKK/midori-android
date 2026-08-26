@@ -25,7 +25,7 @@ new and intentionally starts with an empty profile.
   and the checksum-verified Gradle 9.7.1 wrapper
 - Rust 1.97.1 and Android NDK 29.0.14206865 for the source-built content
   blocker; substitutions are not accepted for the production artifact
-- A clean `midori-core` checkout at the exact Git revision in
+- A clean `xanh-webkit` checkout at the exact Git revision in
   `ADBLOCK_CORE.lock`, containing `xanh-adblock-core` with Brave
   `adblock-rust` 0.13.3 and core ABI `1.0.0-alpha.1`
 - Stable AndroidX Activity 1.13.0, Annotation 1.10.0, AppCompat 1.8.0 and
@@ -83,7 +83,7 @@ Gradle project files, build logs or release attachments.
    from Mozilla's exclusive official Maven repository.
 9. Confirm `ADBLOCK_CORE.lock` pins core ABI `1.0.0-alpha.1`, adblock-rust
    0.13.3, Rust 1.97.1, NDK 29.0.14206865 and Android API 26, plus the exact
-   `midori-core` Git revision. Confirm JNA remains a direct, fixed 5.18.1 AAR
+   `xanh-webkit` Git revision. Confirm JNA remains a direct, fixed 5.18.1 AAR
    dependency with strict Gradle checksums and a notice in
    `THIRD_PARTY_NOTICES.md`. JNA follows the reviewed native-ABI gate and is
    therefore intentionally excluded from the general UI latest-version gate.
@@ -105,7 +105,7 @@ the `core_git_revision` in `ADBLOCK_CORE.lock`. Choose a new, non-existent
 output directory; the source-build script rejects an existing path.
 
 ```sh
-export XANH_ADBLOCK_CORE_CHECKOUT=/absolute/path/to/midori-core
+export XANH_ADBLOCK_CORE_CHECKOUT=/absolute/path/to/xanh-webkit
 export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
 adblock_package_parent="$(mktemp -d)"
 export XANH_ADBLOCK_NATIVE_DIR="$adblock_package_parent/jni"

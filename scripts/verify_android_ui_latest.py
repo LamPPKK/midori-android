@@ -515,7 +515,7 @@ def verify_adblock_source_contract(root: Path) -> None:
 
     workflow = _read_bounded(root / ".github/workflows/android.yml", 512 * 1024)
     checkout = re.compile(
-        r"(?m)^\s+repository: LamPPKK/midori-core\s*$\n"
+        r"(?m)^\s+repository: LamPPKK/xanh-webkit\s*$\n"
         + rf"^\s+ref: {revision}\s*$\n"
         + r"^\s+path: _xanh_adblock_core\s*$"
     )

@@ -173,7 +173,7 @@ classification for service-worker requests are best-effort. `blob:` and
 - Android SDK Platform 37.1 and Build Tools 36.1.0
 - An API 26+ device or emulator for instrumentation tests
 - For production adblock packaging: Rust 1.97.1, Android NDK 29.0.14206865 and
-  the `midori-core` revision pinned by `ADBLOCK_CORE.lock`
+  the `xanh-webkit` revision pinned by `ADBLOCK_CORE.lock`
 
 The Gradle wrapper downloads Gradle 9.7.1. Use the wrapper rather than a global
 Gradle installation.
@@ -231,7 +231,7 @@ wire format and conflict rules.
 
 The separately installable WPE WebKit experiment is intentionally the Lite
 one-tab edition in the
-[core repository](https://github.com/LamPPKK/midori-core/tree/main/app-webkit).
+[WebKit suite repository](https://github.com/LamPPKK/xanh-webkit/tree/main/app-webkit).
 The full multi-tab app remains on serviced Android System WebView until WPEView
 exposes the navigation, permission, download and 16 KiB-native-library baseline
 required by the full browser. The preview uses its own application ID and
@@ -307,7 +307,7 @@ Xanh Browser 1.0 supports Android API 26–36. A legacy-data bridge and a bundle
 WebKit engine for the full edition are not part of this repository's 1.0
 production scope. Xanh Browser Lite, its WebKit preview and the Linux desktop
 application are maintained in the
-[core repository](https://github.com/LamPPKK/midori-core).
+[Xanh WebKit repository](https://github.com/LamPPKK/xanh-webkit).
 
 ## Historical baseline and license
 

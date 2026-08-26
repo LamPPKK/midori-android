@@ -361,7 +361,7 @@ class AndroidUILatestTests(unittest.TestCase):
             workflows = root / ".github/workflows"
             workflows.mkdir(parents=True)
             workflow = """
-              repository: LamPPKK/midori-core
+              repository: LamPPKK/xanh-webkit
               ref: REVISION
               path: _xanh_adblock_core
               uses: dtolnay/rust-toolchain@1.97.1

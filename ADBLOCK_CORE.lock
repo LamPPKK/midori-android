@@ -1,5 +1,5 @@
 format=1
-core_git_revision=1a04af4883e100dca1962334faddcecac665a2e5
+core_git_revision=10904b5a96cd9172c7753a2616fc491632b569b1
 core_version=1.0.0-alpha.1
 adblock_rust_version=0.13.3
 adblock_rust_revision=886d45dcf5283ce8eddc6d961e7dd27966ab23f2

@@ -322,7 +322,7 @@ def parse_arguments() -> argparse.Namespace:
         "--root",
         type=Path,
         default=Path(__file__).resolve().parent.parent,
-        help="midori-android repository root",
+        help="xanh-android repository root",
     )
     parser.add_argument(
         "--tags-file",

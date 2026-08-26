@@ -18,8 +18,8 @@ jobs:
       - name: Check out the exact reviewed adblock core
         uses: actions/checkout@v6
         with:
-          repository: LamPPKK/midori-core
-          ref: 1a04af4883e100dca1962334faddcecac665a2e5
+          repository: LamPPKK/xanh-webkit
+          ref: 10904b5a96cd9172c7753a2616fc491632b569b1
           path: _xanh_adblock_core
           persist-credentials: false
       - uses: actions/setup-java@v5

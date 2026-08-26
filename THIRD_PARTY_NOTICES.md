@@ -11,7 +11,7 @@ the Mozilla Public License 2.0 (MPL-2.0).
 - Release: <https://github.com/brave/adblock-rust/releases/tag/v0.13.3>
 - License: <https://www.mozilla.org/MPL/2.0/>
 
-The Android artifact is built from the `midori-core` revision recorded in
+The Android artifact is built from the `xanh-webkit` revision recorded in
 `ADBLOCK_CORE.lock`; its generated `ADBLOCK_CORE.manifest` records that revision
 and the SHA-256 digest for every packaged ABI. Distribution must retain this
 notice, the source location and the corresponding MPL-2.0 license text. The

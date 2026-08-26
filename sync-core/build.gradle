@@ -67,7 +67,7 @@ afterEvaluate {
 }
 
 dependencies {
-    // Keep this set in lockstep with midori-core/xanh-sync-core/
+    // Keep this set in lockstep with xanh-webkit/xanh-sync-core/
     // APPLICATION_SERVICES.lock. Do not use dynamic or nightly versions.
     api 'org.mozilla.appservices:fxaclient:155.0'
     api 'org.mozilla.appservices:places:155.0'
